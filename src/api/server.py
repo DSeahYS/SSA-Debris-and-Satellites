@@ -174,7 +174,56 @@ def get_space_weather():
         "dst_index": weather.dst_index,
         "f107_flux": weather.f107_flux,
         "storm_level": weather.storm_level,
+        "solar_wind_speed": weather.solar_wind_speed,
+        "solar_wind_density": weather.solar_wind_density,
+        "solar_wind_bt": weather.solar_wind_bt,
+        "solar_wind_bz": weather.solar_wind_bz,
+        "xray_class": weather.xray_class,
+        "xray_flux": weather.xray_flux,
+        "proton_gt10mev": weather.proton_gt10mev,
+        "proton_gt100mev": weather.proton_gt100mev,
+    }, meta={
+        "sources": ["NOAA/SWPC Kp", "NOAA/SWPC F10.7", "DSCOVR Solar Wind", "GOES X-Ray", "GOES Proton"],
     })
+
+
+@app.get("/api/v1/positions")
+def get_satellite_positions(group: str = Query("stations")):
+    """
+    Compute current lat/lng/alt for all satellites in a CelesTrak group.
+    Used to render satellite objects as dots on the globe.
+    """
+    from datetime import datetime
+    raw = fetch_gp_data(group)
+    records = parse_omm_records(raw)
+    now = datetime.utcnow()
+    jd_now, fr_now = jday(now.year, now.month, now.day, now.hour, now.minute, now.second)
+    results = []
+    for rec in records:
+        try:
+            sat, jd_ep, fr_ep = _build_satrec(rec)
+            e, r, v = sat.sgp4(jd_now, fr_now)
+            if e != 0 or r is None:
+                continue
+            x, y, z = r[0], r[1], r[2]
+            r_mag = np.sqrt(x**2 + y**2 + z**2)
+            alt = r_mag - 6371.0
+            lat = np.arcsin(z / r_mag) * (180.0 / pi)
+            lng = np.arctan2(y, x) * (180.0 / pi)
+            results.append({
+                "norad_id": rec.norad_cat_id,
+                "name": rec.object_name,
+                "lat": round(float(lat), 4),
+                "lng": round(float(lng), 4),
+                "alt_km": round(float(alt), 1),
+                "periapsis_km": round(rec.periapsis_km, 1),
+                "apoapsis_km": round(rec.apoapsis_km, 1),
+                "inclination": round(rec.inclination, 2),
+                "period_min": round(rec.period_min, 2),
+            })
+        except Exception:
+            continue
+    return SuccessResponse(data=results, meta={"group": group, "total": len(results)})
 
 
 @app.get("/api/v1/conjunctions")

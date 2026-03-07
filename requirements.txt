@@ -1,11 +1,6 @@
 sgp4
-torch
 numpy
 fastapi
-uvicorn
+uvicorn[standard]
 requests
-aiohttp
-httpx
-pytest
-pytest-cov
 pydantic

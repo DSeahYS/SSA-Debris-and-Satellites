@@ -1,100 +1,58 @@
 /**
- * GOD'S EYE — C2 Interface Controller
- * Manages satellite search, conjunction screening, threat board,
- * maneuver recommendations, and operational status.
+ * GOD'S EYE — C2 Interface Controller v4
+ * Clickable satellite objects, expanded weather (6 sources),
+ * time control, and fixed globe speed.
  */
 
-// ═══════════════════════════════════════
-// STATE
-// ═══════════════════════════════════════
-const S = {
-    primary: null,
-    conjunctions: [],
-    predictions: [],
-    weather: null,
-    screening: false,
-    logCount: 0,
-};
-
-// ═══════════════════════════════════════
-// DOM
-// ═══════════════════════════════════════
+const S = { primary: null, conjunctions: [], predictions: [], weather: null, screening: false, logCount: 0, objects: [], liveMode: true, timeOffset: 0 };
 const $ = id => document.getElementById(id);
 
 const D = {
-    // Clocks
     utcClock: $('utc-clock'), localClock: $('local-clock'), mjdClock: $('mjd-clock'),
-    // Threat
-    threatVal: $('threat-val'), threatLevel: $('threat-level'),
-    apiDot: $('api-dot'), apiLabel: $('api-label'),
-    // Search
+    threatVal: $('threat-val'), apiDot: $('api-dot'), apiLabel: $('api-label'),
     searchInput: $('search-input'), btnSearch: $('btn-search'), searchResults: $('search-results'),
-    // Satellite
     satDetail: $('sat-detail'), priStatus: $('pri-status'),
-    // Environment
     envKp: $('env-kp'), envF107: $('env-f107'), envStorm: $('env-storm'),
-    envDrag: $('env-drag'), envTs: $('env-ts'),
-    // Screening
-    inThreshold: $('in-threshold'), inHours: $('in-hours'), inStep: $('in-step'),
-    inCatalog: $('in-catalog'),
-    btnScreen: $('btn-screen'), btnPropagate: $('btn-propagate'),
+    envSwSpeed: $('env-sw-speed'), envSwDens: $('env-sw-dens'), envBtBz: $('env-bt-bz'),
+    envXray: $('env-xray'), envProton: $('env-proton'), envTs: $('env-ts'),
+    inThreshold: $('in-threshold'), inHours: $('in-hours'), inCatalog: $('in-catalog'),
+    inGlobeGroup: $('in-globe-group'),
+    btnScreen: $('btn-screen'), btnPropagate: $('btn-propagate'), btnLoadObjects: $('btn-load-objects'),
     screenStatus: $('screen-status'),
-    // Globe
-    globeSub: $('globe-sub'),
-    // Event Log
+    globeSub: $('globe-sub'), globeContainer: $('globeViz'),
+    satPopup: $('sat-popup'), popupContent: $('popup-content'),
     eventLog: $('event-log'), logCountEl: $('log-count'),
-    // Threat Board
     conjCount: $('conj-count'), conjTbody: $('conj-tbody'),
     tsCrit: $('ts-crit'), tsWarn: $('ts-warn'), tsCaut: $('ts-caut'), tsNom: $('ts-nom'),
-    // Maneuver
     maneuverDetail: $('maneuver-detail'),
-    // Stats
     statScreened: $('stat-screened'), statApproaches: $('stat-approaches'),
-    statSource: $('stat-source'), statEpoch: $('stat-epoch'),
-    // Globe
-    globeContainer: $('globeViz'),
+    statOnGlobe: $('stat-on-globe'),
+    btnLive: $('btn-live'), btnHist: $('btn-hist'),
+    timeSliderWrap: $('time-slider-wrap'), timeOffset: $('time-offset'), timeOffsetVal: $('time-offset-val'),
 };
 
-// ═══════════════════════════════════════
-// CLOCKS
-// ═══════════════════════════════════════
+// Clocks
 function updateClocks() {
     const now = new Date();
     D.utcClock.textContent = now.toISOString().substring(11, 19) + 'Z';
     D.localClock.textContent = now.toLocaleTimeString('en-GB');
-    // Modified Julian Date
     const jd = (now.getTime() / 86400000) + 2440587.5;
-    const mjd = jd - 2400000.5;
-    D.mjdClock.textContent = mjd.toFixed(3);
+    D.mjdClock.textContent = (jd - 2400000.5).toFixed(3);
 }
 setInterval(updateClocks, 1000);
 updateClocks();
 
-// ═══════════════════════════════════════
 // API
-// ═══════════════════════════════════════
 const API = {
-    async get(url) {
-        const r = await fetch(url);
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.error?.message || `HTTP ${r.status}`);
-        return j;
-    },
+    async get(u) { const r = await fetch(u); const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || `HTTP ${r.status}`); return j; },
     search(q) { return this.get(`/api/v1/search?q=${encodeURIComponent(q)}`); },
     weather() { return this.get('/api/v1/space-weather'); },
-    conjunctions(id, thresh, hrs, groups) {
-        return this.get(`/api/v1/conjunctions?norad_id=${id}&threshold_km=${thresh}&hours=${hrs}&screen_groups=${encodeURIComponent(groups)}`);
-    },
-    predict(id, days, steps) {
-        let u = `/api/v1/predict/baseline?days=${days}&steps_per_day=${steps}`;
-        if (id) u += `&norad_id=${id}`;
-        return this.get(u);
-    },
+    positions(g) { return this.get(`/api/v1/positions?group=${g}`); },
+    conjunctions(id, t, h, g) { return this.get(`/api/v1/conjunctions?norad_id=${id}&threshold_km=${t}&hours=${h}&screen_groups=${encodeURIComponent(g)}`); },
+    predict(id, d, s) { let u = `/api/v1/predict/baseline?days=${d}&steps_per_day=${s}`; if (id) u += `&norad_id=${id}`; return this.get(u); },
 };
 
-// ═══════════════════════════════════════
-// GLOBE
-// ═══════════════════════════════════════
+// Globe
 const GlobeCtrl = {
     w: null,
     init() {
@@ -103,293 +61,212 @@ const GlobeCtrl = {
             .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
             .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
             .atmosphereColor('#00d4ff')
-            .atmosphereAltitude(0.15)
-            .pointOfView({ altitude: 2.2 });
+            .atmosphereAltitude(0.12)
+            .pointOfView({ altitude: 2.0 });
+        // Slow rotation
         this.w.controls().autoRotate = true;
-        this.w.controls().autoRotateSpeed = 0.15;
+        this.w.controls().autoRotateSpeed = 0.05;
+        // Points click handler
+        this.w.onPointClick(p => Act.clickObject(p));
+    },
+    showPoints(data) {
+        this.w.pointsData(data)
+            .pointLat(d => d.lat)
+            .pointLng(d => d.lng)
+            .pointAltitude(d => Math.min(d.alt_km / 40000, 0.15))
+            .pointRadius(d => d.norad_id === S.primary?.norad_id ? 0.4 : 0.15)
+            .pointColor(d => {
+                if (d.norad_id === S.primary?.norad_id) return '#00ff88';
+                if (d.name.includes('DEB')) return '#ff4466';
+                if (d.name.includes('R/B')) return '#ff8800';
+                return '#00d4ff';
+            })
+            .pointLabel(d => `${d.name} (${d.norad_id})`)
+            .pointResolution(6);
     },
     showPath(data) {
         if (!data?.length) { this.w.pathsData([]); return; }
         this.w.pathsData([data.map(p => [p.lat, p.lng, p.alt])])
-            .pathColor(() => 'rgba(0, 212, 255, 0.7)')
-            .pathDashLength(0.006)
-            .pathDashGap(0.002)
-            .pathDashAnimateTime(80000)
-            .pathStroke(2);
+            .pathColor(() => 'rgba(0, 255, 136, 0.6)')
+            .pathDashLength(0.01)
+            .pathDashGap(0.005)
+            .pathDashAnimateTime(200000)
+            .pathStroke(1.5);
     },
-    clear() { this.w.pathsData([]); },
 };
 
-// ═══════════════════════════════════════
-// LOG
-// ═══════════════════════════════════════
+// Log
 const Log = {
-    add(msg, cls = '') {
-        S.logCount++;
-        const d = document.createElement('div');
-        d.className = `ev ${cls}`;
-        const ts = new Date().toISOString().substring(11, 19);
-        d.innerHTML = `<span class="ev-ts">${ts}Z</span><span class="ev-msg">${msg}</span>`;
-        D.eventLog.appendChild(d);
-        D.eventLog.scrollTop = D.eventLog.scrollHeight;
-        D.logCountEl.textContent = `${S.logCount} ENTRIES`;
-    },
-    ok(m) { this.add(m, 'ok'); },
-    err(m) { this.add(`ERR: ${m}`, 'err'); },
-    warn(m) { this.add(m, 'warn'); },
-    data(m) { this.add(m, 'data'); },
+    add(m, c = '') { S.logCount++; const d = document.createElement('div'); d.className = `ev ${c}`; d.innerHTML = `<span class="ev-ts">${new Date().toISOString().substring(11, 19)}Z</span><span class="ev-msg">${m}</span>`; D.eventLog.appendChild(d); D.eventLog.scrollTop = D.eventLog.scrollHeight; D.logCountEl.textContent = S.logCount; },
+    ok(m) { this.add(m, 'ok'); }, err(m) { this.add(`ERR: ${m}`, 'err'); }, warn(m) { this.add(m, 'warn'); }, data(m) { this.add(m, 'data'); },
 };
 
-// ═══════════════════════════════════════
-// ACTIONS
-// ═══════════════════════════════════════
+// Actions
 const Act = {
-    // --- Search ---
     async search() {
-        const q = D.searchInput.value.trim();
-        if (!q) return;
+        const q = D.searchInput.value.trim(); if (!q) return;
         Log.add(`QUERY: "${q}"`);
-        try {
-            const res = await API.search(q);
-            this.renderSearch(res.data);
-            Log.data(`${res.data.length} RESULT(S)`);
-        } catch (e) { Log.err(e.message); }
+        try { const r = await API.search(q); this.renderSearch(r.data); Log.data(`${r.data.length} RESULT(S)`); } catch (e) { Log.err(e.message); }
     },
-
     renderSearch(results) {
         D.searchResults.innerHTML = '';
-        if (!results.length) {
-            D.searchResults.innerHTML = '<div class="sr-item null-state">NO RESULTS</div>';
-            D.searchResults.classList.remove('hidden');
-            return;
-        }
+        if (!results.length) { D.searchResults.innerHTML = '<div class="sr-item null-state">NO RESULTS</div>'; D.searchResults.classList.remove('hidden'); return; }
         results.slice(0, 20).forEach(s => {
-            const d = document.createElement('div');
-            d.className = 'sr-item';
-            d.innerHTML = `<div class="sr-name">${s.name}</div>
-                <div class="sr-meta">${s.norad_id} · ${s.periapsis_km}×${s.apoapsis_km} km · ${s.inclination}° · ${s.group}</div>`;
+            const d = document.createElement('div'); d.className = 'sr-item';
+            d.innerHTML = `<div class="sr-name">${s.name}</div><div class="sr-meta">${s.norad_id} · ${s.periapsis_km}×${s.apoapsis_km} km · ${s.inclination}° · ${s.group}</div>`;
             d.onclick = () => this.selectSat(s);
             D.searchResults.appendChild(d);
         });
         D.searchResults.classList.remove('hidden');
     },
-
-    // --- Select Satellite ---
     selectSat(sat) {
         S.primary = sat;
         D.searchResults.classList.add('hidden');
         D.searchInput.value = sat.name;
-        D.priStatus.textContent = 'TRACKING';
-        D.priStatus.style.color = '#00ff88';
-
-        // Detail panel
+        D.priStatus.textContent = 'TRACKING'; D.priStatus.style.color = '#00ff88';
         D.satDetail.innerHTML = `
             <div class="det-title">${sat.name}</div>
-            <div class="det-row">
-                <div class="det-cell"><label>NORAD CAT ID</label><div class="det-val">${sat.norad_id}</div></div>
-                <div class="det-cell"><label>CATALOG GROUP</label><div class="det-val">${sat.group.toUpperCase()}</div></div>
-            </div>
-            <div class="det-row">
-                <div class="det-cell"><label>PERIAPSIS</label><div class="det-val">${sat.periapsis_km} km</div></div>
-                <div class="det-cell"><label>APOAPSIS</label><div class="det-val">${sat.apoapsis_km} km</div></div>
-            </div>
-            <div class="det-row">
-                <div class="det-cell"><label>INCLINATION</label><div class="det-val">${sat.inclination}°</div></div>
-                <div class="det-cell"><label>PERIOD</label><div class="det-val">${sat.period_min} min</div></div>
-            </div>
-            <div class="det-row">
-                <div class="det-cell full"><label>EPOCH</label><div class="det-val">${sat.epoch}</div></div>
-            </div>
-            <div class="det-row">
-                <div class="det-cell"><label>ORBIT TYPE</label><div class="det-val">${sat.periapsis_km < 2000 ? 'LEO' : sat.periapsis_km < 35786 ? 'MEO' : 'GEO'}</div></div>
-                <div class="det-cell"><label>ALTITUDE BAND</label><div class="det-val">${Math.round(sat.periapsis_km)}-${Math.round(sat.apoapsis_km)} km</div></div>
-            </div>
+            <div class="det-row"><div class="det-cell"><label>NORAD ID</label><div class="det-val">${sat.norad_id}</div></div><div class="det-cell"><label>GROUP</label><div class="det-val">${(sat.group || '').toUpperCase()}</div></div></div>
+            <div class="det-row"><div class="det-cell"><label>PERIAPSIS</label><div class="det-val">${sat.periapsis_km} km</div></div><div class="det-cell"><label>APOAPSIS</label><div class="det-val">${sat.apoapsis_km} km</div></div></div>
+            <div class="det-row"><div class="det-cell"><label>INCLINATION</label><div class="det-val">${sat.inclination}°</div></div><div class="det-cell"><label>PERIOD</label><div class="det-val">${sat.period_min} min</div></div></div>
+            <div class="det-row"><div class="det-cell"><label>ORBIT TYPE</label><div class="det-val">${sat.periapsis_km < 2000 ? 'LEO' : sat.periapsis_km < 35786 ? 'MEO' : 'GEO'}</div></div><div class="det-cell"><label>ALT BAND</label><div class="det-val">${Math.round(sat.periapsis_km)}-${Math.round(sat.apoapsis_km)} km</div></div></div>
         `;
-
-        D.btnScreen.disabled = false;
-        D.btnPropagate.disabled = false;
+        D.btnScreen.disabled = false; D.btnPropagate.disabled = false;
         D.screenStatus.textContent = `TARGET: ${sat.name} (${sat.norad_id})`;
         D.globeSub.textContent = sat.name;
-        D.statEpoch.textContent = sat.epoch.substring(0, 10);
-
-        Log.ok(`TARGET ACQUIRED: ${sat.name} [${sat.norad_id}]`);
+        Log.ok(`TARGET: ${sat.name} [${sat.norad_id}]`);
         this.propagate();
+        // Re-render points to highlight primary
+        if (S.objects.length) GlobeCtrl.showPoints(S.objects);
     },
 
-    // --- Space Weather ---
+    // Click a satellite object on the globe
+    clickObject(pt) {
+        D.satPopup.classList.remove('hidden');
+        D.popupContent.innerHTML = `
+            <div class="det-title" style="font-size:11px">${pt.name}</div>
+            <div class="det-row"><div class="det-cell"><label>NORAD</label><div class="det-val">${pt.norad_id}</div></div><div class="det-cell"><label>ALT</label><div class="det-val">${pt.alt_km} km</div></div></div>
+            <div class="det-row"><div class="det-cell"><label>LAT</label><div class="det-val">${pt.lat.toFixed(2)}°</div></div><div class="det-cell"><label>LNG</label><div class="det-val">${pt.lng.toFixed(2)}°</div></div></div>
+            <div class="det-row"><div class="det-cell"><label>PERIAPSIS</label><div class="det-val">${pt.periapsis_km} km</div></div><div class="det-cell"><label>APOAPSIS</label><div class="det-val">${pt.apoapsis_km} km</div></div></div>
+            <div class="det-row"><div class="det-cell"><label>INCL</label><div class="det-val">${pt.inclination}°</div></div><div class="det-cell"><label>PERIOD</label><div class="det-val">${pt.period_min} min</div></div></div>
+            <div style="padding:4px;margin-top:4px"><button class="cmd-btn cmd-primary" onclick="Act.selectSat({norad_id:${pt.norad_id},name:'${pt.name.replace(/'/g, "\\'")}',group:'${D.inGlobeGroup.value}',periapsis_km:${pt.periapsis_km},apoapsis_km:${pt.apoapsis_km},inclination:${pt.inclination},period_min:${pt.period_min}});document.getElementById('sat-popup').classList.add('hidden')">SET AS PRIMARY</button></div>
+        `;
+        Log.data(`INSPECT: ${pt.name} [${pt.norad_id}] @ ${pt.alt_km} km`);
+    },
+
     async loadWeather() {
         try {
-            const res = await API.weather();
-            const w = res.data;
-            S.weather = w;
+            const r = await API.weather(); const w = r.data; S.weather = w;
             D.envKp.textContent = w.kp_index?.toFixed(1) ?? '—';
             D.envF107.textContent = w.f107_flux?.toFixed(0) ?? '—';
             const st = (w.storm_level || '—').toUpperCase().replace('_', ' ');
             D.envStorm.textContent = st;
-            D.envTs.textContent = `LAST UPDATE: ${w.timestamp || '—'}`;
-
-            // Color
             const cls = w.storm_level === 'quiet' ? 'quiet' : w.storm_level === 'unsettled' ? 'unsettled' : w.storm_level === 'storm' ? 'storm' : 'severe';
-            D.envKp.className = `env-val ${cls}`;
-            D.envStorm.className = `env-val ${cls}`;
-
-            // Drag estimate based on Kp
-            const dragPct = w.kp_index < 3 ? '<5%' : w.kp_index < 5 ? '5-20%' : w.kp_index < 7 ? '20-100%' : '>100%';
-            D.envDrag.textContent = dragPct;
-            D.envDrag.className = `env-val ${cls}`;
-
-            D.apiDot.className = 'status-dot green';
-            D.apiLabel.textContent = 'NOMINAL';
-        } catch (e) {
-            D.apiDot.className = 'status-dot red';
-            D.apiLabel.textContent = 'FAULT';
-            Log.err(`SWPC: ${e.message}`);
-        }
+            D.envKp.className = `env-val ${cls}`; D.envStorm.className = `env-val ${cls}`;
+            // Solar wind
+            D.envSwSpeed.textContent = w.solar_wind_speed ? `${Math.round(w.solar_wind_speed)}` : '—';
+            D.envSwSpeed.className = `env-val ${w.solar_wind_speed > 600 ? 'storm' : w.solar_wind_speed > 400 ? 'unsettled' : 'quiet'}`;
+            D.envSwDens.textContent = w.solar_wind_density ? `${w.solar_wind_density.toFixed(1)}` : '—';
+            D.envBtBz.textContent = (w.solar_wind_bt != null && w.solar_wind_bz != null) ? `${w.solar_wind_bt.toFixed(1)}/${w.solar_wind_bz.toFixed(1)}` : '—';
+            if (w.solar_wind_bz != null && w.solar_wind_bz < -10) D.envBtBz.className = 'env-val storm';
+            // X-ray
+            D.envXray.textContent = w.xray_class || '—';
+            if (w.xray_class && w.xray_class.startsWith('M')) D.envXray.className = 'env-val unsettled';
+            else if (w.xray_class && w.xray_class.startsWith('X')) D.envXray.className = 'env-val storm';
+            else D.envXray.className = 'env-val quiet';
+            // Proton
+            D.envProton.textContent = w.proton_gt10mev != null ? w.proton_gt10mev.toFixed(1) : '—';
+            if (w.proton_gt10mev > 10) D.envProton.className = 'env-val storm';
+            D.envTs.textContent = `UPDATED: ${w.timestamp || '—'}`;
+            D.apiDot.className = 'status-dot green'; D.apiLabel.textContent = 'NOMINAL';
+        } catch (e) { D.apiDot.className = 'status-dot red'; D.apiLabel.textContent = 'FAULT'; Log.err(`SWPC: ${e.message}`); }
     },
 
-    // --- Conjunction Screening ---
+    async loadObjects() {
+        const group = D.inGlobeGroup.value;
+        Log.add(`LOADING OBJECTS: ${group.toUpperCase()}`);
+        try {
+            const r = await API.positions(group);
+            S.objects = r.data;
+            GlobeCtrl.showPoints(r.data);
+            D.statOnGlobe.textContent = r.data.length;
+            D.globeSub.textContent = `${group.toUpperCase()} — ${r.data.length} OBJ`;
+            Log.ok(`${r.data.length} OBJECTS RENDERED ON GLOBE`);
+        } catch (e) { Log.err(e.message); }
+    },
+
     async screen() {
         if (!S.primary || S.screening) return;
-        S.screening = true;
-        D.btnScreen.disabled = true;
-        D.screenStatus.textContent = '⏳ SCREENING IN PROGRESS...';
-
-        const thresh = +D.inThreshold.value;
-        const hrs = +D.inHours.value;
-        const groups = D.inCatalog.value;
-
-        Log.warn(`SCREENING: ${S.primary.name} · ${thresh}km · ${hrs}h`);
-
+        S.screening = true; D.btnScreen.disabled = true; D.screenStatus.textContent = '⏳ SCREENING...';
         try {
-            const res = await API.conjunctions(S.primary.norad_id, thresh, hrs, groups);
-            S.conjunctions = res.data;
-            this.renderThreatBoard(res.data, res.meta);
-            Log.ok(`COMPLETE: ${res.meta.total_screened} OBJECTS SCREENED → ${res.data.length} CONJUNCTION(S)`);
-
-            D.statScreened.textContent = res.meta.total_screened;
-            D.statApproaches.textContent = res.data.length;
-
-            // Update threat posture
-            const hasCrit = res.data.some(c => c.risk_level === 'critical');
-            const hasWarn = res.data.some(c => c.risk_level === 'warning');
-            const hasCaut = res.data.some(c => c.risk_level === 'caution');
-            if (hasCrit) {
-                D.threatVal.textContent = 'CRITICAL'; D.threatVal.className = 'threat-critical';
-            } else if (hasWarn) {
-                D.threatVal.textContent = 'ELEVATED'; D.threatVal.className = 'threat-warning';
-            } else if (hasCaut) {
-                D.threatVal.textContent = 'CAUTION'; D.threatVal.className = 'threat-caution';
-            } else {
-                D.threatVal.textContent = 'NOMINAL'; D.threatVal.className = 'threat-nominal';
-            }
-        } catch (e) {
-            Log.err(e.message);
-        } finally {
-            S.screening = false;
-            D.btnScreen.disabled = false;
-            D.screenStatus.textContent = `TARGET: ${S.primary.name} (${S.primary.norad_id})`;
-        }
+            const r = await API.conjunctions(S.primary.norad_id, +D.inThreshold.value, +D.inHours.value, D.inCatalog.value);
+            S.conjunctions = r.data;
+            this.renderThreatBoard(r.data, r.meta);
+            Log.ok(`SCREENED ${r.meta.total_screened} → ${r.data.length} CONJUNCTION(S)`);
+            D.statScreened.textContent = r.meta.total_screened; D.statApproaches.textContent = r.data.length;
+            const hasCrit = r.data.some(c => c.risk_level === 'critical'), hasWarn = r.data.some(c => c.risk_level === 'warning'), hasCaut = r.data.some(c => c.risk_level === 'caution');
+            D.threatVal.textContent = hasCrit ? 'CRITICAL' : hasWarn ? 'ELEVATED' : hasCaut ? 'CAUTION' : 'NOMINAL';
+            D.threatVal.className = hasCrit ? 'threat-critical' : hasWarn ? 'threat-warning' : hasCaut ? 'threat-caution' : 'threat-nominal';
+        } catch (e) { Log.err(e.message); } finally { S.screening = false; D.btnScreen.disabled = false; D.screenStatus.textContent = `TARGET: ${S.primary.name}`; }
     },
 
-    renderThreatBoard(events, meta) {
-        D.conjCount.textContent = events.length;
-
-        // Summary counts
-        D.tsCrit.textContent = events.filter(e => e.risk_level === 'critical').length;
-        D.tsWarn.textContent = events.filter(e => e.risk_level === 'warning').length;
-        D.tsCaut.textContent = events.filter(e => e.risk_level === 'caution').length;
-        D.tsNom.textContent = events.filter(e => e.risk_level === 'nominal').length;
-
+    renderThreatBoard(evts, meta) {
+        D.conjCount.textContent = evts.length;
+        D.tsCrit.textContent = evts.filter(e => e.risk_level === 'critical').length;
+        D.tsWarn.textContent = evts.filter(e => e.risk_level === 'warning').length;
+        D.tsCaut.textContent = evts.filter(e => e.risk_level === 'caution').length;
+        D.tsNom.textContent = evts.filter(e => e.risk_level === 'nominal').length;
         D.conjTbody.innerHTML = '';
-        if (!events.length) {
-            D.conjTbody.innerHTML = `<tr><td colspan="8" class="null-state">ALL CLEAR — NO CONJUNCTIONS WITHIN ${meta.threshold_km} KM / ${meta.hours}H</td></tr>`;
-            D.maneuverDetail.innerHTML = '<p class="null-state">NO CONJUNCTION EVENTS — NO CA REQUIRED</p>';
-            return;
-        }
-
-        events.forEach((e, i) => {
+        if (!evts.length) { D.conjTbody.innerHTML = `<tr><td colspan="8" class="null-state">CLEAR — ${meta.threshold_km}KM / ${meta.hours}H</td></tr>`; D.maneuverDetail.innerHTML = '<p class="null-state">NO CA REQUIRED</p>'; return; }
+        evts.forEach((e, i) => {
             const tr = document.createElement('tr');
-            const tcaShort = e.tca ? e.tca.substring(5, 19).replace('T', ' ') : '—';
-            tr.innerHTML = `
-                <td><span class="lvl-dot lvl-${e.risk_level}"></span>${e.risk_level.substr(0, 4).toUpperCase()}</td>
-                <td title="NORAD ${e.secondary_norad_id}">${e.secondary_name}</td>
-                <td><strong>${e.miss_distance_km.toFixed(2)}</strong></td>
-                <td>${e.radial_km.toFixed(2)}</td>
-                <td>${e.in_track_km.toFixed(2)}</td>
-                <td>${e.cross_track_km.toFixed(2)}</td>
-                <td>${e.relative_velocity_km_s.toFixed(2)}</td>
-                <td>${tcaShort}</td>
-            `;
-            tr.onclick = () => this.selectConjunction(e, i);
+            tr.innerHTML = `<td><span class="lvl-dot lvl-${e.risk_level}"></span>${e.risk_level.substr(0, 4).toUpperCase()}</td><td title="${e.secondary_norad_id}">${e.secondary_name}</td><td><strong>${e.miss_distance_km.toFixed(2)}</strong></td><td>${e.radial_km.toFixed(2)}</td><td>${e.in_track_km.toFixed(2)}</td><td>${e.cross_track_km.toFixed(2)}</td><td>${e.relative_velocity_km_s.toFixed(2)}</td><td>${(e.tca || '').substring(5, 19).replace('T', ' ')}</td>`;
+            tr.onclick = () => this.selectConj(e, i);
             D.conjTbody.appendChild(tr);
         });
-
-        if (events.length > 0) this.selectConjunction(events[0], 0);
+        if (evts.length) this.selectConj(evts[0], 0);
     },
-
-    selectConjunction(evt, idx) {
-        D.conjTbody.querySelectorAll('tr').forEach((tr, i) => tr.classList.toggle('selected', i === idx));
-
-        if (evt.maneuver) {
-            const m = evt.maneuver;
-            const fc = m.fuel_cost_estimate;
-            D.maneuverDetail.innerHTML = `
-                <div class="mv-grid">
-                    <div class="mv-cell"><label>DELTA-V REQUIRED</label><div class="mv-val ${fc}">${m.delta_v_m_s} m/s</div></div>
-                    <div class="mv-cell"><label>FUEL COST</label><div class="mv-val ${fc}">${fc.toUpperCase()}</div></div>
-                    <div class="mv-cell"><label>EXECUTE AT</label><div class="mv-val">${m.execute_minutes_before_tca} MIN BEFORE TCA</div></div>
-                    <div class="mv-cell"><label>TARGET OFFSET</label><div class="mv-val">${m.target_offset_km} KM</div></div>
-                    <div class="mv-cell full"><label>BURN DIRECTION</label><div class="mv-val" style="font-size:10px">${m.direction.toUpperCase()}</div></div>
-                </div>
-                <div class="mv-note">${m.note}</div>
-            `;
+    selectConj(e, i) {
+        D.conjTbody.querySelectorAll('tr').forEach((tr, j) => tr.classList.toggle('selected', j === i));
+        if (e.maneuver) {
+            const m = e.maneuver, fc = m.fuel_cost_estimate;
+            D.maneuverDetail.innerHTML = `<div class="mv-grid"><div class="mv-cell"><label>Δv</label><div class="mv-val ${fc}">${m.delta_v_m_s} m/s</div></div><div class="mv-cell"><label>FUEL</label><div class="mv-val ${fc}">${fc.toUpperCase()}</div></div><div class="mv-cell"><label>EXECUTE</label><div class="mv-val">${m.execute_minutes_before_tca}m PRE-TCA</div></div><div class="mv-cell"><label>OFFSET</label><div class="mv-val">${m.target_offset_km} km</div></div><div class="mv-cell full"><label>DIRECTION</label><div class="mv-val" style="font-size:9px">${m.direction.toUpperCase()}</div></div></div><div class="mv-note">${m.note}</div>`;
         } else {
-            D.maneuverDetail.innerHTML = `
-                <div class="mv-grid">
-                    <div class="mv-cell"><label>ASSESSMENT</label><div class="mv-val" style="color:var(--green)">NO MANEUVER REQUIRED</div></div>
-                    <div class="mv-cell"><label>MISS DISTANCE</label><div class="mv-val">${evt.miss_distance_km.toFixed(2)} KM</div></div>
-                    <div class="mv-cell"><label>RISK LEVEL</label><div class="mv-val">${evt.risk_level.toUpperCase()}</div></div>
-                    <div class="mv-cell"><label>REL. VELOCITY</label><div class="mv-val">${evt.relative_velocity_km_s.toFixed(2)} KM/S</div></div>
-                </div>
-            `;
+            D.maneuverDetail.innerHTML = `<div class="mv-grid"><div class="mv-cell"><label>STATUS</label><div class="mv-val" style="color:var(--green)">NO CA REQUIRED</div></div><div class="mv-cell"><label>MISS</label><div class="mv-val">${e.miss_distance_km.toFixed(2)} KM</div></div></div>`;
         }
     },
 
-    // --- Propagate Orbit ---
     async propagate() {
         if (!S.primary) return;
-        Log.add(`PROPAGATING: ${S.primary.name}`);
+        Log.add(`SGP4: ${S.primary.name}`);
         try {
-            const res = await API.predict(S.primary.norad_id, 1, 96);
-            S.predictions = res.data;
-            GlobeCtrl.showPath(res.data);
-            D.globeSub.textContent = `${S.primary.name} — ${res.data.length} PTS`;
-            Log.ok(`${res.data.length} ORBITAL POINTS RENDERED`);
+            const r = await API.predict(S.primary.norad_id, 1, 96);
+            S.predictions = r.data;
+            GlobeCtrl.showPath(r.data);
+            Log.ok(`${r.data.length} ORBITAL PTS`);
         } catch (e) { Log.err(e.message); }
     },
 };
 
-// ═══════════════════════════════════════
-// BINDINGS
-// ═══════════════════════════════════════
+// Bindings
 D.searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') Act.search(); });
 D.btnSearch.addEventListener('click', () => Act.search());
-document.addEventListener('click', e => {
-    if (!e.target.closest('#search-pane')) D.searchResults.classList.add('hidden');
-});
+document.addEventListener('click', e => { if (!e.target.closest('#search-pane,#sat-popup')) { D.searchResults.classList.add('hidden'); } });
+D.satPopup.addEventListener('click', e => { if (e.target === D.satPopup) D.satPopup.classList.add('hidden'); });
 D.btnScreen.addEventListener('click', () => Act.screen());
 D.btnPropagate.addEventListener('click', () => Act.propagate());
+D.btnLoadObjects.addEventListener('click', () => Act.loadObjects());
+// Time control
+D.btnLive.addEventListener('click', () => { S.liveMode = true; D.btnLive.classList.add('active'); D.btnHist.classList.remove('active'); D.timeSliderWrap.classList.add('hidden'); S.timeOffset = 0; });
+D.btnHist.addEventListener('click', () => { S.liveMode = false; D.btnHist.classList.add('active'); D.btnLive.classList.remove('active'); D.timeSliderWrap.classList.remove('hidden'); });
+D.timeOffset.addEventListener('input', e => { S.timeOffset = +e.target.value; D.timeOffsetVal.textContent = `${S.timeOffset > 0 ? '+' : ''}${S.timeOffset}h`; });
 
-// ═══════════════════════════════════════
-// BOOT
-// ═══════════════════════════════════════
+// Boot
 async function boot() {
     GlobeCtrl.init();
-    Log.add('SYSTEM INITIALIZED — GOD\'S EYE C2 v3.1');
-    Log.add('ENTER SATELLITE NAME OR NORAD ID TO BEGIN');
+    Log.add('C2 v4.0 INITIALIZED — 6 DATA FEEDS');
+    Log.add('QUERY SATELLITE OR LOAD OBJECTS TO BEGIN');
     await Act.loadWeather();
-    D.apiDot.className = 'status-dot green';
-    D.apiLabel.textContent = 'NOMINAL';
     setInterval(() => Act.loadWeather(), 60000);
 }
 boot();

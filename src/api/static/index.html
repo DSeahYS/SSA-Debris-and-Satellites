@@ -5,8 +5,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GOD'S EYE — Combined Space Operations Center</title>
-    <meta name="description"
-        content="SSA Command & Control interface for conjunction assessment, orbital surveillance, and collision avoidance.">
     <link
         href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap"
         rel="stylesheet">
@@ -15,7 +13,7 @@
 </head>
 
 <body>
-    <!-- TOP STATUS BAR -->
+    <!-- TOP BAR -->
     <header id="top-bar">
         <div class="top-left">
             <span class="sys-name">◉ GOD'S EYE</span>
@@ -30,32 +28,25 @@
             </div>
         </div>
         <div class="top-right">
-            <div class="threat-level" id="threat-level">
-                <label>THREAT POSTURE</label>
-                <span id="threat-val" class="threat-nominal">NOMINAL</span>
-            </div>
+            <div class="threat-level"><label>THREAT POSTURE</label><span id="threat-val"
+                    class="threat-nominal">NOMINAL</span></div>
             <div class="ops-status">
                 <span class="status-dot green"></span><span>DATA LINK</span>
-                <span class="status-dot" id="api-dot"></span><span id="api-label">CHECKING</span>
+                <span class="status-dot" id="api-dot"></span><span id="api-label">INIT</span>
             </div>
         </div>
     </header>
 
-    <!-- MAIN GRID -->
     <main id="grid">
-        <!-- COL 1: SEARCH + SATELLITE DETAIL + SPACE WEATHER -->
+        <!-- COL 1 -->
         <div class="col col-1">
-            <!-- Search -->
-            <section class="pane" id="search-pane">
+            <section class="pane">
                 <div class="pane-hdr">SATELLITE QUERY</div>
-                <div class="search-row">
-                    <input type="text" id="search-input" placeholder="NAME or NORAD ID">
-                    <button id="btn-search" class="cmd-btn">QRY</button>
-                </div>
+                <div class="search-row"><input type="text" id="search-input" placeholder="NAME or NORAD ID"><button
+                        id="btn-search" class="cmd-btn">QRY</button></div>
                 <div id="search-results" class="sr-list hidden"></div>
             </section>
 
-            <!-- Primary Satellite Detail -->
             <section class="pane" id="sat-detail-pane">
                 <div class="pane-hdr">PRIMARY OBJECT <span id="pri-status" class="hdr-badge"></span></div>
                 <div id="sat-detail" class="detail-grid">
@@ -63,129 +54,144 @@
                 </div>
             </section>
 
-            <!-- Space Environment -->
-            <section class="pane" id="env-pane">
-                <div class="pane-hdr">SPACE ENVIRONMENT <span class="hdr-sub">(NOAA SWPC LIVE)</span></div>
-                <div class="env-grid">
+            <!-- Space Environment — expanded with all data sources -->
+            <section class="pane">
+                <div class="pane-hdr">SPACE ENVIRONMENT <span class="hdr-sub">(6 NOAA FEEDS)</span></div>
+                <div class="env-grid env-grid-6">
                     <div class="env-cell"><label>Kp</label><span id="env-kp" class="env-val">—</span></div>
                     <div class="env-cell"><label>F10.7</label><span id="env-f107" class="env-val">—</span></div>
                     <div class="env-cell"><label>STORM</label><span id="env-storm" class="env-val">—</span></div>
-                    <div class="env-cell"><label>DRAG Δ</label><span id="env-drag" class="env-val">—</span></div>
+                    <div class="env-cell"><label>SW SPEED</label><span id="env-sw-speed" class="env-val">—</span></div>
+                    <div class="env-cell"><label>SW DENSITY</label><span id="env-sw-dens" class="env-val">—</span></div>
+                    <div class="env-cell"><label>Bt / Bz</label><span id="env-bt-bz" class="env-val">—</span></div>
+                    <div class="env-cell"><label>X-RAY</label><span id="env-xray" class="env-val">—</span></div>
+                    <div class="env-cell"><label>PROTON ≥10</label><span id="env-proton" class="env-val">—</span></div>
                 </div>
-                <div class="env-footer" id="env-ts">LAST UPDATE: —</div>
+                <div class="env-footer" id="env-ts">SRC: Kp · F10.7 · DSCOVR · GOES X-ray · GOES Proton</div>
             </section>
 
             <!-- Screening Controls -->
-            <section class="pane" id="screen-pane">
+            <section class="pane">
                 <div class="pane-hdr">SCREENING PARAMETERS</div>
                 <div class="param-grid">
-                    <div class="param-item">
-                        <label>THRESHOLD</label>
+                    <div class="param-item"><label>THRESHOLD</label>
                         <div class="param-input-row"><input type="number" id="in-threshold" value="50" min="1"
                                 max="500"><span class="unit">km</span></div>
                     </div>
-                    <div class="param-item">
-                        <label>WINDOW</label>
+                    <div class="param-item"><label>WINDOW</label>
                         <div class="param-input-row"><input type="number" id="in-hours" value="24" min="1"
                                 max="168"><span class="unit">hrs</span></div>
                     </div>
-                    <div class="param-item">
-                        <label>STEP</label>
-                        <div class="param-input-row"><input type="number" id="in-step" value="60" min="10"
-                                max="300"><span class="unit">sec</span></div>
-                    </div>
-                    <div class="param-item">
-                        <label>CATALOG</label>
+                    <div class="param-item"><label>CATALOG</label>
                         <select id="in-catalog">
                             <option value="stations,active,visual">ACTIVE+VIS</option>
                             <option value="stations,active,visual,starlink">+STARLINK</option>
                             <option value="stations,active,visual,cosmos-2251-debris,fengyun-1c-debris">+DEBRIS</option>
                             <option
                                 value="stations,active,visual,starlink,cosmos-2251-debris,fengyun-1c-debris,weather,geo">
-                                ALL CATALOG</option>
+                                ALL</option>
+                        </select>
+                    </div>
+                    <div class="param-item"><label>SHOW ON GLOBE</label>
+                        <select id="in-globe-group">
+                            <option value="stations">SPACE STATIONS</option>
+                            <option value="active">ACTIVE SATS</option>
+                            <option value="starlink">STARLINK</option>
+                            <option value="cosmos-2251-debris">COSMOS DEBRIS</option>
+                            <option value="fengyun-1c-debris">FENGYUN DEBRIS</option>
                         </select>
                     </div>
                 </div>
                 <div class="cmd-row">
-                    <button id="btn-screen" class="cmd-btn cmd-primary" disabled>▶ EXECUTE SCREENING</button>
+                    <button id="btn-screen" class="cmd-btn cmd-primary" disabled>▶ SCREEN</button>
                     <button id="btn-propagate" class="cmd-btn" disabled>PROPAGATE</button>
+                    <button id="btn-load-objects" class="cmd-btn">LOAD OBJECTS</button>
                 </div>
                 <div class="screen-status" id="screen-status">AWAITING TARGET SELECTION</div>
             </section>
+
+            <!-- Time Control -->
+            <section class="pane">
+                <div class="pane-hdr">TIME CONTROL</div>
+                <div class="time-ctrl">
+                    <div class="time-mode">
+                        <button id="btn-live" class="cmd-btn time-btn active">● LIVE</button>
+                        <button id="btn-hist" class="cmd-btn time-btn">HISTORICAL</button>
+                    </div>
+                    <div id="time-slider-wrap" class="hidden">
+                        <label>OFFSET: <span id="time-offset-val">0h</span></label>
+                        <input type="range" id="time-offset" min="-72" max="72" value="0" step="1">
+                        <div class="time-labels"><span>-72h</span><span>NOW</span><span>+72h</span></div>
+                    </div>
+                </div>
+            </section>
         </div>
 
-        <!-- COL 2: GLOBE + EVENT LOG -->
+        <!-- COL 2: Globe + Log -->
         <div class="col col-2">
             <section class="pane globe-pane">
                 <div class="pane-hdr">ORBITAL SURVEILLANCE <span class="hdr-sub" id="globe-sub">NO TRACK</span></div>
                 <div id="globeViz"></div>
+                <!-- Sat info popup -->
+                <div id="sat-popup" class="sat-popup hidden">
+                    <div id="popup-content"></div>
+                </div>
             </section>
             <section class="pane log-pane">
-                <div class="pane-hdr">EVENT LOG <span class="hdr-sub" id="log-count">0 ENTRIES</span></div>
+                <div class="pane-hdr">EVENT LOG <span class="hdr-sub" id="log-count">0</span></div>
                 <div id="event-log" class="ev-log"></div>
             </section>
         </div>
 
-        <!-- COL 3: CONJUNCTION THREAT BOARD + MANEUVER -->
+        <!-- COL 3: Threat Board + Maneuver + Stats -->
         <div class="col col-3">
-            <!-- Threat Board -->
             <section class="pane threat-pane">
-                <div class="pane-hdr">
-                    CONJUNCTION THREAT BOARD
-                    <span class="hdr-badge" id="conj-count">0</span>
+                <div class="pane-hdr">CONJUNCTION THREAT BOARD <span class="hdr-badge" id="conj-count">0</span></div>
+                <div class="threat-summary">
+                    <div class="ts-cell critical"><label>CRIT</label><span id="ts-crit">0</span></div>
+                    <div class="ts-cell warning"><label>WARN</label><span id="ts-warn">0</span></div>
+                    <div class="ts-cell caution"><label>CAUT</label><span id="ts-caut">0</span></div>
+                    <div class="ts-cell nominal"><label>NOM</label><span id="ts-nom">0</span></div>
                 </div>
-                <!-- Summary stats -->
-                <div class="threat-summary" id="threat-summary">
-                    <div class="ts-cell critical"><label>CRITICAL</label><span id="ts-crit">0</span></div>
-                    <div class="ts-cell warning"><label>WARNING</label><span id="ts-warn">0</span></div>
-                    <div class="ts-cell caution"><label>CAUTION</label><span id="ts-caut">0</span></div>
-                    <div class="ts-cell nominal"><label>NOMINAL</label><span id="ts-nom">0</span></div>
-                </div>
-                <!-- Conjunction Table -->
                 <div class="threat-table-wrap">
                     <table id="conj-table">
                         <thead>
                             <tr>
                                 <th>LVL</th>
-                                <th>SECONDARY OBJECT</th>
-                                <th>MISS<br>(km)</th>
-                                <th>RADIAL<br>(km)</th>
-                                <th>IN-TRK<br>(km)</th>
-                                <th>X-TRK<br>(km)</th>
-                                <th>V<sub>REL</sub><br>(km/s)</th>
+                                <th>SECONDARY</th>
+                                <th>MISS<br>km</th>
+                                <th>R<br>km</th>
+                                <th>I<br>km</th>
+                                <th>C<br>km</th>
+                                <th>V<sub>r</sub><br>km/s</th>
                                 <th>TCA (Z)</th>
                             </tr>
                         </thead>
                         <tbody id="conj-tbody">
                             <tr>
-                                <td colspan="8" class="null-state">NO SCREENING DATA</td>
+                                <td colspan="8" class="null-state">NO DATA</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
             </section>
-
-            <!-- Maneuver Decision -->
             <section class="pane maneuver-pane">
-                <div class="pane-hdr">COLLISION AVOIDANCE RECOMMENDATION</div>
+                <div class="pane-hdr">COLLISION AVOIDANCE</div>
                 <div id="maneuver-detail">
-                    <p class="null-state">SELECT CONJUNCTION EVENT FOR CA ANALYSIS</p>
+                    <p class="null-state">SELECT EVENT FOR CA</p>
                 </div>
             </section>
-
-            <!-- Catalog Stats -->
             <section class="pane stats-pane">
                 <div class="pane-hdr">CATALOG STATUS</div>
                 <div class="stats-grid">
-                    <div class="stat-cell"><label>OBJECTS SCREENED</label><span id="stat-screened">—</span></div>
-                    <div class="stat-cell"><label>CLOSE APPROACHES</label><span id="stat-approaches">—</span></div>
-                    <div class="stat-cell"><label>DATA SOURCE</label><span id="stat-source">CELESTRAK</span></div>
-                    <div class="stat-cell"><label>EPOCH AGE</label><span id="stat-epoch">—</span></div>
+                    <div class="stat-cell"><label>SCREENED</label><span id="stat-screened">—</span></div>
+                    <div class="stat-cell"><label>APPROACHES</label><span id="stat-approaches">—</span></div>
+                    <div class="stat-cell"><label>ON GLOBE</label><span id="stat-on-globe">—</span></div>
+                    <div class="stat-cell"><label>SOURCES</label><span id="stat-sources">6</span></div>
                 </div>
             </section>
         </div>
     </main>
-
     <script src="app.js"></script>
 </body>
 

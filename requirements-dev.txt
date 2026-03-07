@@ -1,0 +1,12 @@
+# Full development dependencies (includes ML/training tools)
+sgp4
+numpy
+torch
+fastapi
+uvicorn[standard]
+requests
+aiohttp
+httpx
+pydantic
+pytest
+pytest-cov

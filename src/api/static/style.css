@@ -830,6 +830,102 @@ select option {
     }
 }
 
+/* 8-CELL ENV GRID */
+.env-grid-6 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+/* SATELLITE POPUP */
+.sat-popup {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+}
+
+.sat-popup.hidden {
+    display: none;
+}
+
+#popup-content {
+    background: var(--bg-pane);
+    border: 1px solid var(--cyan);
+    border-radius: 4px;
+    padding: 8px;
+    min-width: 260px;
+    max-width: 320px;
+}
+
+/* TIME CONTROL */
+.time-ctrl {
+    padding: 4px;
+}
+
+.time-mode {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 4px;
+}
+
+.time-btn {
+    flex: 1;
+}
+
+.time-btn.active {
+    background: var(--cyan-dim);
+    border-color: var(--cyan);
+    color: var(--cyan);
+}
+
+#time-slider-wrap {
+    padding: 4px 0;
+}
+
+#time-slider-wrap label {
+    font-size: 8px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+}
+
+#time-offset {
+    width: 100%;
+    margin: 4px 0;
+    accent-color: var(--cyan);
+}
+
+.time-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 7px;
+    color: var(--text-dim);
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* SELECT STYLING */
+select {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text-bright);
+    font: 500 10px var(--mono);
+    padding: 3px 4px;
+    border-radius: 2px;
+    outline: none;
+    width: 100%;
+}
+
+select:focus {
+    border-color: var(--cyan);
+}
+
 /* SCROLLBAR */
 ::-webkit-scrollbar {
     width: 3px;
