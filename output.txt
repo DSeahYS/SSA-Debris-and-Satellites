@@ -1,0 +1,36 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.13.5, pytest-9.0.2, pluggy-1.6.0 -- C:\VSCode Folder\SSA Startup\venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\VSCode Folder\SSA Startup
+plugins: anyio-4.12.1, cov-7.0.0
+collecting ... collected 13 items
+
+tests/test_api.py::test_read_root PASSED                                 [  7%]
+tests/test_api.py::test_get_baseline_predictions_success PASSED          [ 15%]
+tests/test_api.py::test_get_baseline_predictions_validation_error_days PASSED [ 23%]
+tests/test_api.py::test_get_baseline_predictions_validation_error_steps PASSED [ 30%]
+tests/test_api.py::test_get_baseline_predictions_validation_error_type PASSED [ 38%]
+tests/test_evaluate_mvp.py::test_run_mvp_evaluation PASSED               [ 46%]
+tests/test_ingestion.py::test_load_sample_tle PASSED                     [ 53%]
+tests/test_ingestion.py::test_parse_tle PASSED                           [ 61%]
+tests/test_pinn.py::test_pinn_predictor_initialization PASSED            [ 69%]
+tests/test_pinn.py::test_pinn_predictor_forward PASSED                   [ 76%]
+tests/test_pinn.py::test_pinn_predictor_physics_loss PASSED              [ 84%]
+tests/test_sgp4.py::test_sgp4_prediction PASSED                          [ 92%]
+tests/test_sgp4.py::test_sgp4_prediction_window PASSED                   [100%]
+
+=============================== tests coverage ================================
+_______________ coverage: platform win32, python 3.13.5-final-0 _______________
+
+Name                           Stmts   Miss  Cover   Missing
+------------------------------------------------------------
+src\api\schemas.py                15      0   100%
+src\api\server.py                 48      2    96%   51, 64
+src\data\ingestion.py             13      1    92%   31
+src\data\preprocessing.py         17      5    71%   40-46
+src\evaluate_mvp.py               44      3    93%   15-16, 71
+src\models\baseline_sgp4.py       25      2    92%   28, 45
+src\models\pinn_predictor.py      20      0   100%
+------------------------------------------------------------
+TOTAL                            182     13    93%
+============================= 13 passed in 1.80s ==============================

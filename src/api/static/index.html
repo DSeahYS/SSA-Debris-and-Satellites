@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>God's Eye SSA Platform</title>
+    <!-- Globe.gl and Three.js -->
+    <script src="https://unpkg.com/globe.gl"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="ui-container">
+        <header>
+            <div class="logo">
+                <span class="logo-icon">🛰️</span>
+                <h1>God's Eye <span class="accent">SSA Platform</span></h1>
+            </div>
+            <div class="status-indicator">
+                <div class="pulse"></div>
+                <span>System Online | Data Refinery active</span>
+            </div>
+        </header>
+
+        <main class="dashboard">
+            <div class="panel controls-panel">
+                <h2>Orbital Controls</h2>
+                
+                <div class="control-group">
+                    <label for="prediction-days">Prediction Window (Days)</label>
+                    <input type="range" id="prediction-days" min="1" max="14" value="1" step="1">
+                    <span id="days-value" class="value-display">1 Day</span>
+                </div>
+                
+                <div class="control-group">
+                    <label for="steps-per-day">Fidelity (Steps/Day)</label>
+                    <input type="range" id="steps-per-day" min="6" max="96" value="24" step="6">
+                    <span id="steps-value" class="value-display">24 Steps</span>
+                </div>
+
+                <div class="button-group">
+                    <button id="btn-baseline" class="btn primary">Run SGP4 Baseline</button>
+                    <button id="btn-pinn" class="btn secondary" disabled>Run PINN Predictor (Mock)</button>
+                    <button id="btn-clear" class="btn outline">Clear Data</button>
+                </div>
+                
+                <div class="stats-box">
+                    <h3>Active Catalog</h3>
+                    <div class="stat-row">
+                        <span class="label">Total Objects</span>
+                        <span class="value">1 (ISS Mock)</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="label">Data Source</span>
+                        <span class="value">Mock TLE</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel feed-panel">
+                <h2>Telemetry Feed</h2>
+                <div id="terminal" class="terminal-view">
+                    <div class="log-line system">Waiting for prediction request...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- The 3D rendered globe will attach to this div -->
+    <div id="globeViz"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
