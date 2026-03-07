@@ -18,16 +18,21 @@ CACHE_TTL_SECONDS = 3600  # 1 hour cache validity
 
 # Satellite groups available on CelesTrak
 SATELLITE_GROUPS = {
+    # Active
     "stations": "Space Stations (ISS, Tiangong)",
     "active": "Active Satellites",
     "starlink": "Starlink Constellation",
-    "cosmos-2251-debris": "Cosmos 2251 Debris",
-    "fengyun-1c-debris": "Fengyun 1C Debris",
-    "iridium-33-debris": "Iridium 33 Debris",
     "visual": "Brightest / Visible",
     "weather": "Weather Satellites",
     "geo": "Geostationary Satellites",
     "last-30-days": "Recently Launched (30 days)",
+    # Debris catalogs (all free from CelesTrak)
+    "cosmos-2251-debris": "Cosmos 2251 Debris (2009 collision, ~1800 pcs)",
+    "fengyun-1c-debris": "Fengyun 1C Debris (2007 Chinese ASAT, ~3400 pcs)",
+    "iridium-33-debris": "Iridium 33 Debris (2009 collision)",
+    "cosmos-1408-debris": "Cosmos 1408 Debris (2021 Russian ASAT, ~1500 pcs)",
+    "indian-asat-debris": "Indian ASAT Debris (2019 Mission Shakti)",
+    "1982-092": "1982-092 Breakup Debris",
 }
 
 
