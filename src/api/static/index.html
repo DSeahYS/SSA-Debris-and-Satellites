@@ -4,10 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>God's Eye — SSA Platform v2</title>
+    <title>God's Eye — Conjunction Assessment</title>
     <meta name="description"
-        content="Real-time Space Situational Awareness platform with live CelesTrak orbital data and NOAA space weather integration.">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
+        content="Operational SSA platform with conjunction assessment, miss distance metrics, and collision avoidance recommendations.">
     <link
         href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap"
         rel="stylesheet">
@@ -22,28 +21,43 @@
             <div class="logo">
                 <span class="logo-icon">◉</span>
                 <h1>GOD'S EYE</h1>
-                <span class="version-badge">v2 — LIVE DATA</span>
+                <span class="version-badge">OPERATIONAL</span>
+            </div>
+            <!-- Search Bar -->
+            <div class="search-container">
+                <input type="text" id="search-input" placeholder="Search satellite by name or NORAD ID..."
+                    autocomplete="off">
+                <button id="btn-search" class="btn btn-accent">SEARCH</button>
+                <div id="search-results" class="search-dropdown hidden"></div>
             </div>
             <div class="header-status">
-                <span id="data-source-badge" class="badge badge-live">● LIVE</span>
-                <span id="connection-status" class="badge badge-ok">API CONNECTED</span>
+                <span id="weather-badge" class="badge badge-ok">Kp —</span>
+                <span class="badge badge-live">● LIVE</span>
             </div>
         </header>
 
         <!-- Main Content -->
         <main id="main">
-            <!-- Left Panel -->
+            <!-- Left Panel: Controls + Satellite Info -->
             <aside id="left-panel">
-                <!-- Space Weather Panel -->
+                <!-- Primary Satellite Info -->
+                <section class="panel" id="primary-panel">
+                    <h2 class="panel-title">🎯 PRIMARY SATELLITE</h2>
+                    <div id="primary-info" class="sat-info">
+                        <p class="muted">Search and select a satellite above.</p>
+                    </div>
+                </section>
+
+                <!-- Space Weather -->
                 <section class="panel" id="weather-panel">
-                    <h2 class="panel-title">⚡ SPACE WEATHER</h2>
+                    <h2 class="panel-title">⚡ SPACE WEATHER <span class="refresh-hint">(auto 60s)</span></h2>
                     <div class="weather-grid">
                         <div class="weather-card" id="kp-card">
                             <label>Kp INDEX</label>
                             <span class="weather-value" id="kp-value">—</span>
                         </div>
                         <div class="weather-card" id="f107-card">
-                            <label>F10.7 FLUX</label>
+                            <label>F10.7 SFU</label>
                             <span class="weather-value" id="f107-value">—</span>
                         </div>
                         <div class="weather-card full-width" id="storm-card">
@@ -53,63 +67,102 @@
                     </div>
                 </section>
 
-                <!-- Satellite Group Selector -->
+                <!-- Screening Controls -->
                 <section class="panel">
-                    <h2 class="panel-title">🛰 CATALOG</h2>
+                    <h2 class="panel-title">🔎 CONJUNCTION SCREENING</h2>
                     <div class="control-group">
-                        <label for="group-select">Satellite Group</label>
-                        <select id="group-select">
-                            <option value="stations">Space Stations</option>
-                            <option value="active">Active Satellites</option>
-                            <option value="starlink">Starlink</option>
-                            <option value="visual">Brightest / Visible</option>
-                            <option value="weather">Weather Sats</option>
-                            <option value="geo">Geostationary</option>
-                            <option value="cosmos-2251-debris">Cosmos 2251 Debris</option>
-                            <option value="fengyun-1c-debris">Fengyun 1C Debris</option>
-                            <option value="last-30-days">Last 30 Days</option>
-                        </select>
+                        <label>Threshold (km)</label>
+                        <input type="number" id="threshold-input" value="50" min="1" max="500" step="1">
                     </div>
                     <div class="control-group">
-                        <label for="sat-select">Select Satellite</label>
-                        <select id="sat-select">
-                            <option value="">— Load catalog first —</option>
+                        <label>Window (hours)</label>
+                        <input type="number" id="hours-input" value="24" min="1" max="168" step="1">
+                    </div>
+                    <div class="control-group">
+                        <label>Screen Against</label>
+                        <select id="screen-groups">
+                            <option value="stations,active,visual">Stations + Active + Visible</option>
+                            <option value="stations,active,visual,starlink">+ Starlink</option>
+                            <option value="stations,active,visual,cosmos-2251-debris,fengyun-1c-debris">+ Debris Fields
+                            </option>
+                            <option
+                                value="stations,active,visual,starlink,cosmos-2251-debris,fengyun-1c-debris,weather,geo">
+                                ALL GROUPS</option>
                         </select>
                     </div>
-                    <button id="btn-load-catalog" class="btn btn-secondary">Load Catalog</button>
+                    <button id="btn-screen" class="btn btn-primary" disabled>▶ RUN SCREENING</button>
+                    <p class="hint" id="screen-hint">Select a primary satellite first.</p>
                 </section>
 
-                <!-- Prediction Controls -->
+                <!-- Orbit Prediction -->
                 <section class="panel">
-                    <h2 class="panel-title">📡 PREDICT</h2>
-                    <div class="control-group">
-                        <label for="prediction-days">Window: <span id="days-value">1 Day</span></label>
-                        <input type="range" id="prediction-days" min="1" max="14" value="1">
+                    <h2 class="panel-title">📡 ORBIT PREDICTION</h2>
+                    <div class="control-row">
+                        <div class="control-group">
+                            <label>Days: <span id="days-val">1</span></label>
+                            <input type="range" id="pred-days" min="1" max="14" value="1">
+                        </div>
+                        <div class="control-group">
+                            <label>Steps: <span id="steps-val">48</span></label>
+                            <input type="range" id="pred-steps" min="24" max="360" value="48" step="12">
+                        </div>
                     </div>
-                    <div class="control-group">
-                        <label for="steps-per-day">Fidelity: <span id="steps-value">24 Steps</span></label>
-                        <input type="range" id="steps-per-day" min="12" max="360" value="24" step="12">
-                    </div>
-                    <div class="btn-group">
-                        <button id="btn-baseline" class="btn btn-primary">▶ Run SGP4</button>
-                        <button id="btn-clear" class="btn btn-ghost">✕ Clear</button>
-                    </div>
+                    <button id="btn-predict" class="btn btn-secondary" disabled>PROPAGATE SGP4</button>
                 </section>
             </aside>
 
-            <!-- Globe -->
-            <div id="globeViz"></div>
+            <!-- Center: Globe -->
+            <div id="center-area">
+                <div id="globeViz"></div>
+                <!-- Alert Banner -->
+                <div id="alert-banner" class="hidden">
+                    <span id="alert-icon">⚠️</span>
+                    <span id="alert-text"></span>
+                </div>
+            </div>
 
-            <!-- Right Panel: Telemetry -->
+            <!-- Right Panel: Conjunction Table + Maneuver -->
             <aside id="right-panel">
+                <section class="panel conjunction-panel">
+                    <h2 class="panel-title">🚨 CONJUNCTION EVENTS <span id="event-count" class="count-badge">0</span>
+                    </h2>
+                    <div id="conjunction-table-container">
+                        <table id="conjunction-table">
+                            <thead>
+                                <tr>
+                                    <th>RISK</th>
+                                    <th>SECONDARY</th>
+                                    <th>MISS (km)</th>
+                                    <th>R / I / C</th>
+                                    <th>V<sub>rel</sub></th>
+                                    <th>TCA</th>
+                                </tr>
+                            </thead>
+                            <tbody id="conjunction-tbody">
+                                <tr>
+                                    <td colspan="6" class="muted">No screening run yet.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Maneuver Recommendation -->
+                <section class="panel" id="maneuver-panel">
+                    <h2 class="panel-title">🔧 AVOIDANCE MANEUVER</h2>
+                    <div id="maneuver-info">
+                        <p class="muted">Select a conjunction event to see recommendations.</p>
+                    </div>
+                </section>
+
+                <!-- Telemetry -->
                 <section class="panel terminal-panel">
-                    <h2 class="panel-title">📟 TELEMETRY</h2>
+                    <h2 class="panel-title">📟 LOG</h2>
                     <div id="terminal" class="terminal"></div>
                 </section>
             </aside>
         </main>
     </div>
-
     <script src="app.js"></script>
 </body>
 

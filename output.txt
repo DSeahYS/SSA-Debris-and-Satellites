@@ -3,32 +3,39 @@ platform win32 -- Python 3.13.5, pytest-9.0.2, pluggy-1.6.0 -- C:\VSCode Folder\
 cachedir: .pytest_cache
 rootdir: C:\VSCode Folder\SSA Startup
 plugins: anyio-4.12.1, cov-7.0.0
-collecting ... collected 26 items
+collecting ... collected 33 items
 
-tests/test_api.py::test_read_root PASSED                                 [  3%]
-tests/test_api.py::test_get_catalog PASSED                               [  7%]
-tests/test_api.py::test_get_groups PASSED                                [ 11%]
-tests/test_api.py::test_get_space_weather PASSED                         [ 15%]
-tests/test_api.py::test_baseline_predictions_mock PASSED                 [ 19%]
-tests/test_api.py::test_baseline_predictions_real_satellite PASSED       [ 23%]
-tests/test_api.py::test_baseline_predictions_not_found PASSED            [ 26%]
-tests/test_api.py::test_baseline_predictions_validation PASSED           [ 30%]
-tests/test_celestrak_client.py::test_parse_omm_records PASSED            [ 34%]
-tests/test_celestrak_client.py::test_parse_omm_records_handles_malformed PASSED [ 38%]
-tests/test_celestrak_client.py::test_parse_omm_records_empty PASSED      [ 42%]
-tests/test_celestrak_client.py::test_get_satellite_catalog PASSED        [ 46%]
-tests/test_evaluate_mvp.py::test_run_mvp_evaluation PASSED               [ 50%]
-tests/test_ingestion.py::test_load_sample_tle PASSED                     [ 53%]
-tests/test_ingestion.py::test_parse_tle PASSED                           [ 57%]
-tests/test_pinn.py::test_pinn_predictor_initialization PASSED            [ 61%]
-tests/test_pinn.py::test_pinn_predictor_forward PASSED                   [ 65%]
-tests/test_pinn.py::test_pinn_predictor_physics_loss PASSED              [ 69%]
-tests/test_sgp4.py::test_sgp4_prediction PASSED                          [ 73%]
-tests/test_sgp4.py::test_sgp4_prediction_window PASSED                   [ 76%]
-tests/test_space_weather.py::test_storm_classification_quiet PASSED      [ 80%]
-tests/test_space_weather.py::test_storm_classification_unsettled PASSED  [ 84%]
-tests/test_space_weather.py::test_storm_classification_storm PASSED      [ 88%]
-tests/test_space_weather.py::test_storm_classification_severe PASSED     [ 92%]
+tests/test_api.py::test_root PASSED                                      [  3%]
+tests/test_api.py::test_groups PASSED                                    [  6%]
+tests/test_api.py::test_catalog PASSED                                   [  9%]
+tests/test_api.py::test_space_weather PASSED                             [ 12%]
+tests/test_api.py::test_search PASSED                                    [ 15%]
+tests/test_api.py::test_search_by_norad_id PASSED                        [ 18%]
+tests/test_api.py::test_search_empty PASSED                              [ 21%]
+tests/test_api.py::test_baseline_no_norad PASSED                         [ 24%]
+tests/test_api.py::test_conjunctions_not_found PASSED                    [ 27%]
+tests/test_api.py::test_baseline_validation PASSED                       [ 30%]
+tests/test_celestrak_client.py::test_parse_omm_records PASSED            [ 33%]
+tests/test_celestrak_client.py::test_parse_omm_records_handles_malformed PASSED [ 36%]
+tests/test_celestrak_client.py::test_parse_omm_records_empty PASSED      [ 39%]
+tests/test_celestrak_client.py::test_get_satellite_catalog PASSED        [ 42%]
+tests/test_conjunction.py::test_risk_classification PASSED               [ 45%]
+tests/test_conjunction.py::test_decompose_miss_radial PASSED             [ 48%]
+tests/test_conjunction.py::test_decompose_miss_in_track PASSED           [ 51%]
+tests/test_conjunction.py::test_decompose_miss_cross_track PASSED        [ 54%]
+tests/test_conjunction.py::test_avoidance_maneuver_estimate PASSED       [ 57%]
+tests/test_evaluate_mvp.py::test_run_mvp_evaluation PASSED               [ 60%]
+tests/test_ingestion.py::test_load_sample_tle PASSED                     [ 63%]
+tests/test_ingestion.py::test_parse_tle PASSED                           [ 66%]
+tests/test_pinn.py::test_pinn_predictor_initialization PASSED            [ 69%]
+tests/test_pinn.py::test_pinn_predictor_forward PASSED                   [ 72%]
+tests/test_pinn.py::test_pinn_predictor_physics_loss PASSED              [ 75%]
+tests/test_sgp4.py::test_sgp4_prediction PASSED                          [ 78%]
+tests/test_sgp4.py::test_sgp4_prediction_window PASSED                   [ 81%]
+tests/test_space_weather.py::test_storm_classification_quiet PASSED      [ 84%]
+tests/test_space_weather.py::test_storm_classification_unsettled PASSED  [ 87%]
+tests/test_space_weather.py::test_storm_classification_storm PASSED      [ 90%]
+tests/test_space_weather.py::test_storm_classification_severe PASSED     [ 93%]
 tests/test_space_weather.py::test_get_current_space_weather PASSED       [ 96%]
 tests/test_space_weather.py::test_get_weather_handles_empty PASSED       [100%]
 
@@ -38,14 +45,15 @@ _______________ coverage: platform win32, python 3.13.5-final-0 _______________
 Name                               Stmts   Miss  Cover   Missing
 ----------------------------------------------------------------
 src\api\schemas.py                    15      0   100%
-src\api\server.py                     84      2    98%   62, 77
+src\api\server.py                    131     44    66%   61, 73, 81-89, 94-110, 162-163, 199-223, 245-254
 src\data\celestrak_client.py          92     30    67%   74, 78, 82-86, 100-125, 191-197
 src\data\ingestion.py                 13      1    92%   31
 src\data\preprocessing.py             17      5    71%   40-46
 src\data\space_weather_client.py      74     30    59%   47-54, 61-69, 76-83, 123-128
 src\evaluate_mvp.py                   44      3    93%   15-16, 71
 src\models\baseline_sgp4.py           25      2    92%   28, 45
+src\models\conjunction.py            112     64    43%   45-69, 74-77, 123-206
 src\models\pinn_predictor.py          20      0   100%
 ----------------------------------------------------------------
-TOTAL                                384     73    81%
-============================= 26 passed in 1.95s ==============================
+TOTAL                                543    179    67%
+============================= 33 passed in 2.15s ==============================
