@@ -1,80 +1,82 @@
-# God's Eye SSA Platform (MVP)
+# God's Eye — Space Situational Awareness Platform (v2)
 
-An AI-native data refinery for the orbital commons, shifting the paradigm from legacy TLE/SGP4 models to high-precision Physics-Informed Neural Networks (PINNs) for orbit prediction.
+A production-grade AI data refinery for the orbital commons. Fuses real orbital data from **CelesTrak** with live space weather from **NOAA SWPC** to predict satellite trajectories using SGP4 and (soon) Physics-Informed Neural Networks.
 
-## Overview
+## Live Data Sources
 
-This repository contains the MVP (Minimum Viable Product) for the God's Eye Space Situational Awareness (SSA) platform. The primary goal of this MVP is to establish the baseline legacy model (SGP4) and set up the testing harness and pseudo-architecture for the PINN predictor.
+| Source | API | Data | Cross-Checks |
+|--------|-----|------|---------------|
+| **CelesTrak** | `celestrak.org/NORAD/elements/gp.php` | GP orbital elements (JSON) for all tracked RSOs | Ground truth state vectors |
+| **NOAA SWPC** | `services.swpc.noaa.gov/json/` | Kp index, F10.7 solar flux | Atmospheric drag driver |
 
 ## Features
 
-- **SGP4 Baseline Evaluation**: Evaluates mock historical TLE data using the legacy SGP4 propagator.
-- **PINN Architecture**: Scaffolds a Physics-Informed Neural Network designed to learn orbital dynamics via a custom physics loss function.
-- **FastAPI Backend**: Serves orbital coordinates via a modern, structured API.
-- **3D Web Dashboard**: Visualizes orbital trajectories on a 3D Earth using Globe.gl.
+- **Real Satellite Catalog**: Browse and select from CelesTrak's live database (Space Stations, Starlink, Debris, etc.)
+- **Live Space Weather**: Real-time Kp index and F10.7 solar flux with storm-level classification
+- **SGP4 Orbit Propagation**: Predict any tracked satellite's trajectory over 1–30 days
+- **3D Globe Visualization**: Render orbital paths on an interactive Globe.gl Earth
+- **PINN Architecture**: Scaffolded Physics-Informed Neural Network for drag-aware predictions
+- **81%+ Test Coverage**: TDD-compliant with 26 passing tests
 
 ## Project Structure
 
-```text
+```
 SSA Startup/
-│
 ├── src/
 │   ├── api/
-│   │   ├── static/         # Frontend Web Application (HTML, JS, CSS)
-│   │   ├── schemas.py      # Standardized API Response Models
-│   │   └── server.py       # FastAPI Server
+│   │   ├── static/              # Web Dashboard (HTML/CSS/JS)
+│   │   ├── schemas.py           # Pydantic response models
+│   │   └── server.py            # FastAPI server (v2)
 │   ├── data/
-│   │   ├── ingestion.py    # TLE Parsing and Loading
-│   │   └── preprocessing.py# Feature extraction
+│   │   ├── celestrak_client.py  # CelesTrak GP/OMM JSON client
+│   │   ├── space_weather_client.py  # NOAA SWPC Kp/F10.7 client
+│   │   ├── ingestion.py         # Mock TLE loader
+│   │   └── preprocessing.py     # Feature extraction
 │   ├── models/
-│   │   ├── baseline_sgp4.py# SGP4 Orbit Propagation
-│   │   └── pinn_predictor.py# PINN Model Scaffold
-│   └── evaluate_mvp.py     # Evaluation Harness Script
-│
-├── tests/                  # Pytest Unit & Integration Tests (>90% coverage)
-├── requirements.txt        # Python Dependencies
-└── README.md               # This file
+│   │   ├── baseline_sgp4.py     # SGP4 orbit propagation
+│   │   └── pinn_predictor.py    # PINN model scaffold
+│   └── evaluate_mvp.py          # Evaluation harness
+├── tests/                       # 26 tests, 81% coverage
+├── requirements.txt
+├── .gitignore
+└── README.md
 ```
 
-## Getting Started
+## Quick Start
 
-1. **Install Dependencies**
-   It is recommended to use a virtual environment.
+```bash
+# 1. Create virtual environment
+python -m venv venv
+venv\Scripts\activate  # Windows
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+# 2. Install dependencies
+pip install -r requirements.txt
 
-2. **Run the API and Web Dashboard**
-   From the `SSA Startup` directory, start the FastAPI server:
+# 3. Start the dashboard
+$env:PYTHONPATH="src"; uvicorn src.api.server:app --reload --port 8000
 
-   ```bash
-   $env:PYTHONPATH="src"; uvicorn src.api.server:app --reload --port 8000
-   ```
+# 4. Open browser
+# http://localhost:8000/static/index.html
+```
 
-   Alternatively, run the server using python directly:
+## Running Tests
 
-   ```bash
-   python -m uvicorn src.api.server:app --reload --port 8000
-   ```
+```bash
+$env:PYTHONPATH="src"; pytest tests/ -v --cov=src --cov-report=term-missing
+```
 
-   Then open your web browser and navigate to `http://localhost:8000/static/index.html`.
+## API Endpoints
 
-3. **Run the Evaluation Script**
-   To execute the evaluation harness for the SGP4 and PINN models in the terminal:
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/catalog?group=stations` | GET | List satellites from CelesTrak |
+| `/api/v1/groups` | GET | Available satellite groups |
+| `/api/v1/space-weather` | GET | Current Kp, F10.7, storm level |
+| `/api/v1/predict/baseline?norad_id=25544&days=1` | GET | SGP4 trajectory prediction |
 
-   ```bash
-   $env:PYTHONPATH="src"; python src/evaluate_mvp.py
-   ```
+## Roadmap
 
-4. **Run Tests**
-   This project follows TDD best practices. To run the test suite and verify coverage:
-
-   ```bash
-   $env:PYTHONPATH="src"; pytest tests/ -v --cov=src --cov-report=term-missing
-   ```
-
-## Next Focus Areas
-
-1. **Connect Historical Data**: Replace the mock TLE data with an actual historical dataset spanning multiple years to begin training the PINN model.
-2. **Implement Physics Loss**: Define the true physics-informed gradients within `pinn_predictor.py` to bound the neural network's predictions.
+- [ ] PINN training loop with real drag-based physics loss
+- [ ] Cross-validation module (SGP4 error vs. geomagnetic activity)
+- [ ] Multi-satellite simultaneous rendering
+- [ ] Conjunction assessment module
