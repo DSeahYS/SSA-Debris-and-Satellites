@@ -4,165 +4,188 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>God's Eye — Conjunction Assessment</title>
+    <title>GOD'S EYE — Combined Space Operations Center</title>
     <meta name="description"
-        content="Operational SSA platform with conjunction assessment, miss distance metrics, and collision avoidance recommendations.">
+        content="SSA Command & Control interface for conjunction assessment, orbital surveillance, and collision avoidance.">
     <link
-        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap"
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script src="//unpkg.com/globe.gl"></script>
 </head>
 
 <body>
-    <div id="app">
-        <!-- Header -->
-        <header id="header">
-            <div class="logo">
-                <span class="logo-icon">◉</span>
-                <h1>GOD'S EYE</h1>
-                <span class="version-badge">OPERATIONAL</span>
+    <!-- TOP STATUS BAR -->
+    <header id="top-bar">
+        <div class="top-left">
+            <span class="sys-name">◉ GOD'S EYE</span>
+            <span class="sys-sub">COMBINED SPACE OPERATIONS CENTER</span>
+        </div>
+        <div class="top-center">
+            <div class="clock-group">
+                <div class="clock-item"><label>ZULU</label><span id="utc-clock" class="clock-val">--:--:--Z</span></div>
+                <div class="clock-item"><label>LOCAL</label><span id="local-clock" class="clock-val">--:--:--</span>
+                </div>
+                <div class="clock-item"><label>MJD</label><span id="mjd-clock" class="clock-val">-----</span></div>
             </div>
-            <!-- Search Bar -->
-            <div class="search-container">
-                <input type="text" id="search-input" placeholder="Search satellite by name or NORAD ID..."
-                    autocomplete="off">
-                <button id="btn-search" class="btn btn-accent">SEARCH</button>
-                <div id="search-results" class="search-dropdown hidden"></div>
+        </div>
+        <div class="top-right">
+            <div class="threat-level" id="threat-level">
+                <label>THREAT POSTURE</label>
+                <span id="threat-val" class="threat-nominal">NOMINAL</span>
             </div>
-            <div class="header-status">
-                <span id="weather-badge" class="badge badge-ok">Kp —</span>
-                <span class="badge badge-live">● LIVE</span>
+            <div class="ops-status">
+                <span class="status-dot green"></span><span>DATA LINK</span>
+                <span class="status-dot" id="api-dot"></span><span id="api-label">CHECKING</span>
             </div>
-        </header>
+        </div>
+    </header>
 
-        <!-- Main Content -->
-        <main id="main">
-            <!-- Left Panel: Controls + Satellite Info -->
-            <aside id="left-panel">
-                <!-- Primary Satellite Info -->
-                <section class="panel" id="primary-panel">
-                    <h2 class="panel-title">🎯 PRIMARY SATELLITE</h2>
-                    <div id="primary-info" class="sat-info">
-                        <p class="muted">Search and select a satellite above.</p>
-                    </div>
-                </section>
+    <!-- MAIN GRID -->
+    <main id="grid">
+        <!-- COL 1: SEARCH + SATELLITE DETAIL + SPACE WEATHER -->
+        <div class="col col-1">
+            <!-- Search -->
+            <section class="pane" id="search-pane">
+                <div class="pane-hdr">SATELLITE QUERY</div>
+                <div class="search-row">
+                    <input type="text" id="search-input" placeholder="NAME or NORAD ID">
+                    <button id="btn-search" class="cmd-btn">QRY</button>
+                </div>
+                <div id="search-results" class="sr-list hidden"></div>
+            </section>
 
-                <!-- Space Weather -->
-                <section class="panel" id="weather-panel">
-                    <h2 class="panel-title">⚡ SPACE WEATHER <span class="refresh-hint">(auto 60s)</span></h2>
-                    <div class="weather-grid">
-                        <div class="weather-card" id="kp-card">
-                            <label>Kp INDEX</label>
-                            <span class="weather-value" id="kp-value">—</span>
-                        </div>
-                        <div class="weather-card" id="f107-card">
-                            <label>F10.7 SFU</label>
-                            <span class="weather-value" id="f107-value">—</span>
-                        </div>
-                        <div class="weather-card full-width" id="storm-card">
-                            <label>GEOMAGNETIC</label>
-                            <span class="weather-value" id="storm-value">—</span>
-                        </div>
-                    </div>
-                </section>
+            <!-- Primary Satellite Detail -->
+            <section class="pane" id="sat-detail-pane">
+                <div class="pane-hdr">PRIMARY OBJECT <span id="pri-status" class="hdr-badge"></span></div>
+                <div id="sat-detail" class="detail-grid">
+                    <p class="null-state">NO OBJECT SELECTED</p>
+                </div>
+            </section>
 
-                <!-- Screening Controls -->
-                <section class="panel">
-                    <h2 class="panel-title">🔎 CONJUNCTION SCREENING</h2>
-                    <div class="control-group">
-                        <label>Threshold (km)</label>
-                        <input type="number" id="threshold-input" value="50" min="1" max="500" step="1">
+            <!-- Space Environment -->
+            <section class="pane" id="env-pane">
+                <div class="pane-hdr">SPACE ENVIRONMENT <span class="hdr-sub">(NOAA SWPC LIVE)</span></div>
+                <div class="env-grid">
+                    <div class="env-cell"><label>Kp</label><span id="env-kp" class="env-val">—</span></div>
+                    <div class="env-cell"><label>F10.7</label><span id="env-f107" class="env-val">—</span></div>
+                    <div class="env-cell"><label>STORM</label><span id="env-storm" class="env-val">—</span></div>
+                    <div class="env-cell"><label>DRAG Δ</label><span id="env-drag" class="env-val">—</span></div>
+                </div>
+                <div class="env-footer" id="env-ts">LAST UPDATE: —</div>
+            </section>
+
+            <!-- Screening Controls -->
+            <section class="pane" id="screen-pane">
+                <div class="pane-hdr">SCREENING PARAMETERS</div>
+                <div class="param-grid">
+                    <div class="param-item">
+                        <label>THRESHOLD</label>
+                        <div class="param-input-row"><input type="number" id="in-threshold" value="50" min="1"
+                                max="500"><span class="unit">km</span></div>
                     </div>
-                    <div class="control-group">
-                        <label>Window (hours)</label>
-                        <input type="number" id="hours-input" value="24" min="1" max="168" step="1">
+                    <div class="param-item">
+                        <label>WINDOW</label>
+                        <div class="param-input-row"><input type="number" id="in-hours" value="24" min="1"
+                                max="168"><span class="unit">hrs</span></div>
                     </div>
-                    <div class="control-group">
-                        <label>Screen Against</label>
-                        <select id="screen-groups">
-                            <option value="stations,active,visual">Stations + Active + Visible</option>
-                            <option value="stations,active,visual,starlink">+ Starlink</option>
-                            <option value="stations,active,visual,cosmos-2251-debris,fengyun-1c-debris">+ Debris Fields
-                            </option>
+                    <div class="param-item">
+                        <label>STEP</label>
+                        <div class="param-input-row"><input type="number" id="in-step" value="60" min="10"
+                                max="300"><span class="unit">sec</span></div>
+                    </div>
+                    <div class="param-item">
+                        <label>CATALOG</label>
+                        <select id="in-catalog">
+                            <option value="stations,active,visual">ACTIVE+VIS</option>
+                            <option value="stations,active,visual,starlink">+STARLINK</option>
+                            <option value="stations,active,visual,cosmos-2251-debris,fengyun-1c-debris">+DEBRIS</option>
                             <option
                                 value="stations,active,visual,starlink,cosmos-2251-debris,fengyun-1c-debris,weather,geo">
-                                ALL GROUPS</option>
+                                ALL CATALOG</option>
                         </select>
                     </div>
-                    <button id="btn-screen" class="btn btn-primary" disabled>▶ RUN SCREENING</button>
-                    <p class="hint" id="screen-hint">Select a primary satellite first.</p>
-                </section>
-
-                <!-- Orbit Prediction -->
-                <section class="panel">
-                    <h2 class="panel-title">📡 ORBIT PREDICTION</h2>
-                    <div class="control-row">
-                        <div class="control-group">
-                            <label>Days: <span id="days-val">1</span></label>
-                            <input type="range" id="pred-days" min="1" max="14" value="1">
-                        </div>
-                        <div class="control-group">
-                            <label>Steps: <span id="steps-val">48</span></label>
-                            <input type="range" id="pred-steps" min="24" max="360" value="48" step="12">
-                        </div>
-                    </div>
-                    <button id="btn-predict" class="btn btn-secondary" disabled>PROPAGATE SGP4</button>
-                </section>
-            </aside>
-
-            <!-- Center: Globe -->
-            <div id="center-area">
-                <div id="globeViz"></div>
-                <!-- Alert Banner -->
-                <div id="alert-banner" class="hidden">
-                    <span id="alert-icon">⚠️</span>
-                    <span id="alert-text"></span>
                 </div>
-            </div>
+                <div class="cmd-row">
+                    <button id="btn-screen" class="cmd-btn cmd-primary" disabled>▶ EXECUTE SCREENING</button>
+                    <button id="btn-propagate" class="cmd-btn" disabled>PROPAGATE</button>
+                </div>
+                <div class="screen-status" id="screen-status">AWAITING TARGET SELECTION</div>
+            </section>
+        </div>
 
-            <!-- Right Panel: Conjunction Table + Maneuver -->
-            <aside id="right-panel">
-                <section class="panel conjunction-panel">
-                    <h2 class="panel-title">🚨 CONJUNCTION EVENTS <span id="event-count" class="count-badge">0</span>
-                    </h2>
-                    <div id="conjunction-table-container">
-                        <table id="conjunction-table">
-                            <thead>
-                                <tr>
-                                    <th>RISK</th>
-                                    <th>SECONDARY</th>
-                                    <th>MISS (km)</th>
-                                    <th>R / I / C</th>
-                                    <th>V<sub>rel</sub></th>
-                                    <th>TCA</th>
-                                </tr>
-                            </thead>
-                            <tbody id="conjunction-tbody">
-                                <tr>
-                                    <td colspan="6" class="muted">No screening run yet.</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
+        <!-- COL 2: GLOBE + EVENT LOG -->
+        <div class="col col-2">
+            <section class="pane globe-pane">
+                <div class="pane-hdr">ORBITAL SURVEILLANCE <span class="hdr-sub" id="globe-sub">NO TRACK</span></div>
+                <div id="globeViz"></div>
+            </section>
+            <section class="pane log-pane">
+                <div class="pane-hdr">EVENT LOG <span class="hdr-sub" id="log-count">0 ENTRIES</span></div>
+                <div id="event-log" class="ev-log"></div>
+            </section>
+        </div>
 
-                <!-- Maneuver Recommendation -->
-                <section class="panel" id="maneuver-panel">
-                    <h2 class="panel-title">🔧 AVOIDANCE MANEUVER</h2>
-                    <div id="maneuver-info">
-                        <p class="muted">Select a conjunction event to see recommendations.</p>
-                    </div>
-                </section>
+        <!-- COL 3: CONJUNCTION THREAT BOARD + MANEUVER -->
+        <div class="col col-3">
+            <!-- Threat Board -->
+            <section class="pane threat-pane">
+                <div class="pane-hdr">
+                    CONJUNCTION THREAT BOARD
+                    <span class="hdr-badge" id="conj-count">0</span>
+                </div>
+                <!-- Summary stats -->
+                <div class="threat-summary" id="threat-summary">
+                    <div class="ts-cell critical"><label>CRITICAL</label><span id="ts-crit">0</span></div>
+                    <div class="ts-cell warning"><label>WARNING</label><span id="ts-warn">0</span></div>
+                    <div class="ts-cell caution"><label>CAUTION</label><span id="ts-caut">0</span></div>
+                    <div class="ts-cell nominal"><label>NOMINAL</label><span id="ts-nom">0</span></div>
+                </div>
+                <!-- Conjunction Table -->
+                <div class="threat-table-wrap">
+                    <table id="conj-table">
+                        <thead>
+                            <tr>
+                                <th>LVL</th>
+                                <th>SECONDARY OBJECT</th>
+                                <th>MISS<br>(km)</th>
+                                <th>RADIAL<br>(km)</th>
+                                <th>IN-TRK<br>(km)</th>
+                                <th>X-TRK<br>(km)</th>
+                                <th>V<sub>REL</sub><br>(km/s)</th>
+                                <th>TCA (Z)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="conj-tbody">
+                            <tr>
+                                <td colspan="8" class="null-state">NO SCREENING DATA</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
 
-                <!-- Telemetry -->
-                <section class="panel terminal-panel">
-                    <h2 class="panel-title">📟 LOG</h2>
-                    <div id="terminal" class="terminal"></div>
-                </section>
-            </aside>
-        </main>
-    </div>
+            <!-- Maneuver Decision -->
+            <section class="pane maneuver-pane">
+                <div class="pane-hdr">COLLISION AVOIDANCE RECOMMENDATION</div>
+                <div id="maneuver-detail">
+                    <p class="null-state">SELECT CONJUNCTION EVENT FOR CA ANALYSIS</p>
+                </div>
+            </section>
+
+            <!-- Catalog Stats -->
+            <section class="pane stats-pane">
+                <div class="pane-hdr">CATALOG STATUS</div>
+                <div class="stats-grid">
+                    <div class="stat-cell"><label>OBJECTS SCREENED</label><span id="stat-screened">—</span></div>
+                    <div class="stat-cell"><label>CLOSE APPROACHES</label><span id="stat-approaches">—</span></div>
+                    <div class="stat-cell"><label>DATA SOURCE</label><span id="stat-source">CELESTRAK</span></div>
+                    <div class="stat-cell"><label>EPOCH AGE</label><span id="stat-epoch">—</span></div>
+                </div>
+            </section>
+        </div>
+    </main>
+
     <script src="app.js"></script>
 </body>
 
