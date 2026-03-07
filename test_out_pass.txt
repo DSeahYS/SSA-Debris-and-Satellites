@@ -1,0 +1,39 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.5, pytest-9.0.2, pluggy-1.5.0 -- C:\Users\daves\miniconda3\python.exe
+cachedir: .pytest_cache
+rootdir: C:\VSCode Folder\SSA Startup
+plugins: anyio-4.11.0, hydra-core-1.3.2
+collecting ... collected 30 items
+
+tests/test_conjunction.py::TestRiskClassification::test_critical PASSED  [  3%]
+tests/test_conjunction.py::TestRiskClassification::test_warning PASSED   [  6%]
+tests/test_conjunction.py::TestRiskClassification::test_caution PASSED   [ 10%]
+tests/test_conjunction.py::TestRiskClassification::test_nominal PASSED   [ 13%]
+tests/test_conjunction.py::TestRiskClassification::test_boundary_1km PASSED [ 16%]
+tests/test_conjunction.py::TestRiskClassification::test_boundary_5km PASSED [ 20%]
+tests/test_conjunction.py::TestRiskClassification::test_boundary_25km PASSED [ 23%]
+tests/test_conjunction.py::TestRICDecomposition::test_radial_miss PASSED [ 26%]
+tests/test_conjunction.py::TestRICDecomposition::test_in_track_miss PASSED [ 30%]
+tests/test_conjunction.py::TestRICDecomposition::test_cross_track_miss PASSED [ 33%]
+tests/test_conjunction.py::TestRICDecomposition::test_combined_miss PASSED [ 36%]
+tests/test_conjunction.py::TestOrbitalSieve::test_passes_same_altitude_band PASSED [ 40%]
+tests/test_conjunction.py::TestOrbitalSieve::test_rejects_high_orbit PASSED [ 43%]
+tests/test_conjunction.py::TestOrbitalSieve::test_rejects_low_orbit PASSED [ 46%]
+tests/test_conjunction.py::TestOrbitalSieve::test_skips_self PASSED      [ 50%]
+tests/test_conjunction.py::TestOrbitalSieve::test_skips_bad_data PASSED  [ 53%]
+tests/test_conjunction.py::TestOrbitalSieve::test_margin_allows_edge_cases PASSED [ 56%]
+tests/test_conjunction.py::TestOrbitalSieve::test_inclination_filter_extreme PASSED [ 60%]
+tests/test_conjunction.py::TestOrbitalSieve::test_inclination_allows_moderate_diff PASSED [ 63%]
+tests/test_conjunction.py::TestOrbitalSieve::test_mixed_catalog PASSED   [ 66%]
+tests/test_conjunction.py::TestManeuverEstimation::test_minimal_fuel_cost PASSED [ 70%]
+tests/test_conjunction.py::TestManeuverEstimation::test_moderate_fuel_cost PASSED [ 73%]
+tests/test_conjunction.py::TestManeuverEstimation::test_significant_fuel_cost PASSED [ 76%]
+tests/test_conjunction.py::TestManeuverEstimation::test_minimum_offset PASSED [ 80%]
+tests/test_conjunction.py::TestManeuverEstimation::test_direction_is_cross_track PASSED [ 83%]
+tests/test_conjunction.py::TestManeuverEstimation::test_execute_timing PASSED [ 86%]
+tests/test_conjunction.py::TestManeuverEstimation::test_has_note PASSED  [ 90%]
+tests/test_conjunction.py::TestScreenConjunctions::test_empty_secondaries PASSED [ 93%]
+tests/test_conjunction.py::TestScreenConjunctions::test_self_excluded PASSED [ 96%]
+tests/test_conjunction.py::TestScreenConjunctions::test_geo_filtered_out PASSED [100%]
+
+============================= 30 passed in 0.11s ==============================
