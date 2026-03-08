@@ -71,9 +71,41 @@ const GlobeCtrl = {
             .atmosphereColor('#00d4ff')
             .atmosphereAltitude(0.12)
             .pointOfView({ altitude: 2.0 });
+
+        const controls = this.w.controls();
         // Slow rotation
-        this.w.controls().autoRotate = true;
-        this.w.controls().autoRotateSpeed = 0.05;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.05;
+
+        // Right-click drag = pan (translate along screen XY)
+        controls.enablePan = true;
+        controls.screenSpacePanning = true;  // pan along screen plane, not world XZ
+        controls.panSpeed = 1.2;
+        // Map: left=rotate, middle=zoom, right=pan
+        controls.mouseButtons = {
+            LEFT: 0,    // THREE.MOUSE.ROTATE
+            MIDDLE: 1,  // THREE.MOUSE.DOLLY
+            RIGHT: 2    // THREE.MOUSE.PAN
+        };
+
+        // Suppress right-click context menu on globe
+        D.globeContainer.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Double-right-click: reset pan to center
+        let lastRightClick = 0;
+        D.globeContainer.addEventListener('mousedown', e => {
+            if (e.button === 2) {
+                const now = Date.now();
+                if (now - lastRightClick < 400) {
+                    // Reset pan target to origin (center of globe)
+                    controls.target.set(0, 0, 0);
+                    controls.update();
+                    Log.add('PAN RESET TO CENTER');
+                }
+                lastRightClick = now;
+            }
+        });
+
         // Points click handler
         this.w.onPointClick(p => Act.clickObject(p));
     },
