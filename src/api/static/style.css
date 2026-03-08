@@ -240,6 +240,40 @@ body {
     letter-spacing: 0.1em;
 }
 
+/* QUICK PICK */
+.quickpick-row {
+    padding: 2px 4px 4px;
+}
+
+.quickpick-row select {
+    width: 100%;
+    background: var(--bg-cell);
+    border: 1px solid var(--border);
+    color: var(--cyan);
+    font: 500 9px var(--mono);
+    padding: 4px 6px;
+    border-radius: 2px;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+}
+
+.quickpick-row select:focus {
+    border-color: var(--cyan);
+}
+
+.quickpick-row select optgroup {
+    color: var(--text-dim);
+    font-weight: 700;
+    font-style: normal;
+    letter-spacing: 0.1em;
+}
+
+.quickpick-row select option {
+    color: var(--text-bright);
+    font-weight: 400;
+    padding: 3px 8px;
+}
+
 /* SEARCH */
 #search-pane {
     flex-shrink: 0;

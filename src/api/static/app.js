@@ -33,6 +33,7 @@ const D = {
     advCount: $('adv-count'), advisoryList: $('advisory-list'),
     decayCount: $('decay-count'), decayList: $('decay-list'),
     btnCdmExport: $('btn-cdm-export'),
+    quickPick: $('quick-pick'),
 };
 
 // Clocks
@@ -331,6 +332,10 @@ D.btnScreen.addEventListener('click', () => Act.screen());
 D.btnPropagate.addEventListener('click', () => Act.propagate());
 D.btnLoadObjects.addEventListener('click', () => { Act.loadObjects(); Act.loadDecayAlerts(); });
 if (D.btnCdmExport) D.btnCdmExport.addEventListener('click', () => Act.exportCDM());
+if (D.quickPick) D.quickPick.addEventListener('change', () => {
+    const val = D.quickPick.value;
+    if (val) { D.searchInput.value = val; Act.search(); D.quickPick.value = ''; }
+});
 // Time control
 D.btnLive.addEventListener('click', () => { S.liveMode = true; D.btnLive.classList.add('active'); D.btnHist.classList.remove('active'); D.timeSliderWrap.classList.add('hidden'); S.timeOffset = 0; });
 D.btnHist.addEventListener('click', () => { S.liveMode = false; D.btnHist.classList.add('active'); D.btnLive.classList.remove('active'); D.timeSliderWrap.classList.remove('hidden'); });

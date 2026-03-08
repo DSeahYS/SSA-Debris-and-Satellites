@@ -40,10 +40,47 @@
     <main id="grid">
         <!-- COL 1 -->
         <div class="col col-1">
-            <section class="pane">
+            <section class="pane" id="search-pane">
                 <div class="pane-hdr">SATELLITE QUERY</div>
                 <div class="search-row"><input type="text" id="search-input" placeholder="NAME or NORAD ID"><button
                         id="btn-search" class="cmd-btn">QRY</button></div>
+                <div class="quickpick-row">
+                    <select id="quick-pick">
+                        <option value="">⬇ QUICK SELECT...</option>
+                        <optgroup label="SPACE STATIONS">
+                            <option value="25544">ISS (ZARYA) — 25544</option>
+                            <option value="54216">CSS (TIANHE) — 54216</option>
+                        </optgroup>
+                        <optgroup label="EARTH OBSERVATION">
+                            <option value="43013">NOAA-20 — 43013</option>
+                            <option value="25338">NOAA-15 — 25338</option>
+                            <option value="27424">AQUA — 27424</option>
+                            <option value="25994">TERRA — 25994</option>
+                            <option value="49260">LANDSAT 9 — 49260</option>
+                        </optgroup>
+                        <optgroup label="NAVIGATION">
+                            <option value="48859">GPS BIIR-2 — 48859</option>
+                            <option value="43567">GALILEO-23 — 43567</option>
+                        </optgroup>
+                        <optgroup label="COMMUNICATIONS">
+                            <option value="44713">STARLINK-1007</option>
+                            <option value="56700">ONEWEB-0534</option>
+                            <option value="36516">ECHOSTAR 14 — 36516</option>
+                        </optgroup>
+                        <optgroup label="SCIENTIFIC">
+                            <option value="20580">HUBBLE — 20580</option>
+                            <option value="36119">SDO — 36119</option>
+                            <option value="43435">TESS — 43435</option>
+                        </optgroup>
+                        <optgroup label="NOTABLE DEBRIS / DEFUNCT">
+                            <option value="22675">COSMOS 2251 — 22675</option>
+                            <option value="25730">FENGYUN 1C — 25730</option>
+                            <option value="36411">COSMOS 2251 DEB</option>
+                            <option value="36508">IRIDIUM 33 DEB</option>
+                            <option value="49271">COSMOS 1408 — 49271</option>
+                        </optgroup>
+                    </select>
+                </div>
                 <div id="search-results" class="sr-list hidden"></div>
             </section>
 
