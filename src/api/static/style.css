@@ -277,6 +277,8 @@ body {
 /* SEARCH */
 #search-pane {
     flex-shrink: 0;
+    position: relative;
+    /* Anchor for absolute search results */
 }
 
 .search-row {
@@ -335,10 +337,17 @@ body {
 }
 
 .sr-list {
-    max-height: 200px;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 250px;
     overflow-y: auto;
     background: var(--bg);
-    border-top: 1px solid var(--border);
+    border: 1px solid var(--border);
+    border-top: none;
+    z-index: 100;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.8);
 }
 
 .sr-list.hidden {
