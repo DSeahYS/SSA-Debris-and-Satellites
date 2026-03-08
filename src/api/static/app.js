@@ -1,10 +1,10 @@
 /**
- * GOD'S EYE — C2 Interface Controller v4
- * Clickable satellite objects, expanded weather (6 sources),
- * time control, and fixed globe speed.
+ * GOD'S EYE — C2 Interface Controller v5
+ * Mission-critical SSA: Pc, CDM, advisories, decay alerts,
+ * proper ECI→ECEF coordinates, and expanded weather.
  */
 
-const S = { primary: null, conjunctions: [], predictions: [], weather: null, screening: false, logCount: 0, objects: [], liveMode: true, timeOffset: 0 };
+const S = { primary: null, conjunctions: [], predictions: [], weather: null, screening: false, logCount: 0, objects: [], liveMode: true, timeOffset: 0, advisories: [], decayAlerts: [], selectedConj: null };
 const $ = id => document.getElementById(id);
 
 const D = {
@@ -29,6 +29,10 @@ const D = {
     statOnGlobe: $('stat-on-globe'),
     btnLive: $('btn-live'), btnHist: $('btn-hist'),
     timeSliderWrap: $('time-slider-wrap'), timeOffset: $('time-offset'), timeOffsetVal: $('time-offset-val'),
+    // New v5 elements
+    advCount: $('adv-count'), advisoryList: $('advisory-list'),
+    decayCount: $('decay-count'), decayList: $('decay-list'),
+    btnCdmExport: $('btn-cdm-export'),
 };
 
 // Clocks
@@ -50,6 +54,9 @@ const API = {
     positions(g) { return this.get(`/api/v1/positions?group=${g}`); },
     conjunctions(id, t, h, g) { return this.get(`/api/v1/conjunctions?norad_id=${id}&threshold_km=${t}&hours=${h}&screen_groups=${encodeURIComponent(g)}`); },
     predict(id, d, s) { let u = `/api/v1/predict/baseline?days=${d}&steps_per_day=${s}`; if (id) u += `&norad_id=${id}`; return this.get(u); },
+    advisories() { return this.get('/api/v1/advisories'); },
+    decay(group, days) { return this.get(`/api/v1/decay?group=${encodeURIComponent(group)}&threshold_days=${days}`); },
+    async cdmText(priId, secId) { const r = await fetch(`/api/v1/cdm?norad_id=${priId}&secondary_id=${secId}&format=kvn`); const j = await r.json(); return j.data; },
 };
 
 // Globe
@@ -217,16 +224,20 @@ const Act = {
         D.tsCaut.textContent = evts.filter(e => e.risk_level === 'caution').length;
         D.tsNom.textContent = evts.filter(e => e.risk_level === 'nominal').length;
         D.conjTbody.innerHTML = '';
-        if (!evts.length) { D.conjTbody.innerHTML = `<tr><td colspan="8" class="null-state">CLEAR — ${meta.threshold_km}KM / ${meta.hours}H</td></tr>`; D.maneuverDetail.innerHTML = '<p class="null-state">NO CA REQUIRED</p>'; return; }
+        if (!evts.length) { D.conjTbody.innerHTML = `<tr><td colspan="9" class="null-state">CLEAR — ${meta.threshold_km}KM / ${meta.hours}H</td></tr>`; D.maneuverDetail.innerHTML = '<p class="null-state">NO CA REQUIRED</p>'; return; }
         evts.forEach((e, i) => {
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td><span class="lvl-dot lvl-${e.risk_level}"></span>${e.risk_level.substr(0, 4).toUpperCase()}</td><td title="${e.secondary_norad_id}">${e.secondary_name}</td><td><strong>${e.miss_distance_km.toFixed(2)}</strong></td><td>${e.radial_km.toFixed(2)}</td><td>${e.in_track_km.toFixed(2)}</td><td>${e.cross_track_km.toFixed(2)}</td><td>${e.relative_velocity_km_s.toFixed(2)}</td><td>${(e.tca || '').substring(5, 19).replace('T', ' ')}</td>`;
+            const pcDisplay = e.collision_probability_display || (e.collision_probability != null ? e.collision_probability.toExponential(2) : '—');
+            const pcClass = e.collision_probability >= 1e-4 ? 'pc-critical' : e.collision_probability >= 1e-5 ? 'pc-warning' : e.collision_probability >= 1e-7 ? 'pc-caution' : 'pc-nominal';
+            tr.innerHTML = `<td><span class="lvl-dot lvl-${e.risk_level}"></span>${e.risk_level.substr(0, 4).toUpperCase()}</td><td title="${e.secondary_norad_id}">${e.secondary_name}</td><td><strong>${e.miss_distance_km.toFixed(2)}</strong></td><td class="pc-val ${pcClass}">${pcDisplay}</td><td>${e.radial_km.toFixed(2)}</td><td>${e.in_track_km.toFixed(2)}</td><td>${e.cross_track_km.toFixed(2)}</td><td>${e.relative_velocity_km_s.toFixed(2)}</td><td>${(e.tca || '').substring(5, 19).replace('T', ' ')}</td>`;
             tr.onclick = () => this.selectConj(e, i);
             D.conjTbody.appendChild(tr);
         });
         if (evts.length) this.selectConj(evts[0], 0);
     },
     selectConj(e, i) {
+        S.selectedConj = e;
+        if (D.btnCdmExport) D.btnCdmExport.disabled = false;
         D.conjTbody.querySelectorAll('tr').forEach((tr, j) => tr.classList.toggle('selected', j === i));
         if (e.maneuver) {
             const m = e.maneuver, fc = m.fuel_cost_estimate;
@@ -246,6 +257,69 @@ const Act = {
             Log.ok(`${r.data.length} ORBITAL PTS`);
         } catch (e) { Log.err(e.message); }
     },
+
+    // Advisories
+    async loadAdvisories() {
+        try {
+            const r = await API.advisories();
+            S.advisories = r.data;
+            this.renderAdvisories(r.data);
+            if (D.advCount) D.advCount.textContent = r.data.length;
+            if (r.data.length) Log.warn(`${r.data.length} ACTIVE ADVISORY(S)`);
+        } catch (e) { if (D.advisoryList) D.advisoryList.innerHTML = '<p class="null-state">UNAVAILABLE</p>'; }
+    },
+    renderAdvisories(advs) {
+        if (!D.advisoryList) return;
+        if (!advs.length) { D.advisoryList.innerHTML = '<p class="null-state">ALL CLEAR — NO ADVISORIES</p>'; return; }
+        D.advisoryList.innerHTML = '';
+        advs.forEach(a => {
+            const card = document.createElement('div');
+            card.className = `adv-card sev-${a.severity}`;
+            card.innerHTML = `<span class="adv-sev ${a.severity}">${a.severity.toUpperCase()}</span><div class="adv-title">${a.title}</div><div class="adv-msg">${a.message.substring(0, 150)}${a.message.length > 150 ? '...' : ''}</div><div class="adv-orbits">AFFECTS: ${a.affected_orbits}</div>`;
+            D.advisoryList.appendChild(card);
+        });
+    },
+
+    // Decay
+    async loadDecayAlerts() {
+        try {
+            const group = D.inGlobeGroup ? D.inGlobeGroup.value : 'fengyun-1c-debris';
+            const r = await API.decay(group, 365);
+            S.decayAlerts = r.data;
+            this.renderDecayAlerts(r.data.slice(0, 10));
+            if (D.decayCount) D.decayCount.textContent = r.data.length;
+            if (r.data.length) Log.data(`${r.data.length} DECAYING OBJECT(S) IN ${group.toUpperCase()}`);
+        } catch (e) { if (D.decayList) D.decayList.innerHTML = '<p class="null-state">UNAVAILABLE</p>'; }
+    },
+    renderDecayAlerts(items) {
+        if (!D.decayList) return;
+        if (!items.length) { D.decayList.innerHTML = '<p class="null-state">NO IMMINENT DECAY</p>'; return; }
+        D.decayList.innerHTML = '';
+        items.forEach(d => {
+            const div = document.createElement('div');
+            div.className = `decay-item ${d.risk_level}`;
+            const daysText = d.days_to_reentry < 365 ? `${Math.round(d.days_to_reentry)}d` : `${(d.days_to_reentry / 365).toFixed(1)}y`;
+            div.innerHTML = `<span class="decay-name">${d.name}</span><span class="decay-days ${d.risk_level}">${daysText}</span><span class="decay-rate">${d.decay_rate_km_day} km/d</span>`;
+            D.decayList.appendChild(div);
+        });
+    },
+
+    // CDM Export
+    async exportCDM() {
+        if (!S.selectedConj || !S.primary) return;
+        try {
+            Log.add(`CDM: ${S.primary.norad_id} ↔ ${S.selectedConj.secondary_norad_id}`);
+            const text = await API.cdmText(S.primary.norad_id, S.selectedConj.secondary_norad_id);
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `CDM_${S.primary.norad_id}_${S.selectedConj.secondary_norad_id}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+            Log.ok('CDM EXPORTED');
+        } catch (e) { Log.err(`CDM: ${e.message}`); }
+    },
 };
 
 // Bindings
@@ -255,7 +329,8 @@ document.addEventListener('click', e => { if (!e.target.closest('#search-pane,#s
 D.satPopup.addEventListener('click', e => { if (e.target === D.satPopup) D.satPopup.classList.add('hidden'); });
 D.btnScreen.addEventListener('click', () => Act.screen());
 D.btnPropagate.addEventListener('click', () => Act.propagate());
-D.btnLoadObjects.addEventListener('click', () => Act.loadObjects());
+D.btnLoadObjects.addEventListener('click', () => { Act.loadObjects(); Act.loadDecayAlerts(); });
+if (D.btnCdmExport) D.btnCdmExport.addEventListener('click', () => Act.exportCDM());
 // Time control
 D.btnLive.addEventListener('click', () => { S.liveMode = true; D.btnLive.classList.add('active'); D.btnHist.classList.remove('active'); D.timeSliderWrap.classList.add('hidden'); S.timeOffset = 0; });
 D.btnHist.addEventListener('click', () => { S.liveMode = false; D.btnHist.classList.add('active'); D.btnLive.classList.remove('active'); D.timeSliderWrap.classList.remove('hidden'); });
@@ -264,9 +339,10 @@ D.timeOffset.addEventListener('input', e => { S.timeOffset = +e.target.value; D.
 // Boot
 async function boot() {
     GlobeCtrl.init();
-    Log.add('C2 v4.0 INITIALIZED — 6 DATA FEEDS');
+    Log.add('C2 v5.0 INITIALIZED — MISSION-CRITICAL SSA');
+    Log.add('Pc ENGINE | CDM GENERATION | DECAY PREDICTION | ADVISORIES');
     Log.add('QUERY SATELLITE OR LOAD OBJECTS TO BEGIN');
-    await Act.loadWeather();
-    setInterval(() => Act.loadWeather(), 60000);
+    await Promise.all([Act.loadWeather(), Act.loadAdvisories(), Act.loadDecayAlerts()]);
+    setInterval(() => { Act.loadWeather(); Act.loadAdvisories(); }, 60000);
 }
 boot();

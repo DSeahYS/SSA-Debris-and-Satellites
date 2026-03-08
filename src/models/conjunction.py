@@ -1,5 +1,5 @@
 """
-Conjunction Assessment Engine (v2 — Smart Sieve)
+Conjunction Assessment Engine (v3 — Smart Sieve + Collision Probability)
 Screens a primary satellite against a catalog of secondaries.
 
 Performance:
@@ -7,8 +7,9 @@ Performance:
   After (v2):  Smart Sieve pre-filter rejects 80-95% of secondaries in O(1)
                using orbital mechanics (apogee/perigee band overlap + inclination)
                before any SGP4 propagation occurs.
+  v3: Adds 2D Chan collision probability (Pc) computation and enhanced risk.
 
-Computes RIC miss distance decomposition and avoidance maneuver estimates.
+Computes RIC miss distance decomposition, Pc, and avoidance maneuver estimates.
 """
 import numpy as np
 from dataclasses import dataclass, field
@@ -17,6 +18,13 @@ from sgp4.api import Satrec, WGS72
 from sgp4.conveniences import jday
 from math import pi
 from datetime import datetime, timedelta
+
+from models.collision_probability import (
+    compute_collision_probability,
+    estimate_position_covariance,
+    classify_risk_with_pc,
+    determine_hard_body_radius,
+)
 
 
 @dataclass
@@ -34,9 +42,14 @@ class CloseApproach:
     cross_track_km: float       # Cross-track (perpendicular to orbital plane)
     relative_velocity_km_s: float  # Relative speed at TCA
     risk_level: str             # "critical", "warning", "caution", "nominal"
+    collision_probability: Optional[float] = None  # Pc from 2D Chan method
+    hard_body_radius_km: float = 0.01             # Combined hard-body radius
 
     @staticmethod
-    def classify_risk(miss_km: float) -> str:
+    def classify_risk(miss_km: float, pc: Optional[float] = None) -> str:
+        """Classify risk using miss distance and optional Pc."""
+        if pc is not None:
+            return classify_risk_with_pc(miss_km, pc)
         if miss_km < 1.0:
             return "critical"
         elif miss_km < 5.0:
@@ -285,6 +298,29 @@ def screen_conjunctions(
         tca_dt = datetime(2000, 1, 1, 12, 0, 0) + timedelta(days=tca_total - 2451545.0)
         tca_iso = tca_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
+        # Compute collision probability (Pc)
+        try:
+            # Estimate epoch age (hours since TLE epoch - approximate)
+            epoch_age_hours = max(1.0, abs(tca_total - 2460000.0) * 24.0)  # rough estimate
+            pri_alt = (primary_omm.periapsis_km + primary_omm.apoapsis_km) / 2.0
+            sec_alt = (omm.periapsis_km + omm.apoapsis_km) / 2.0
+
+            cov_pri = estimate_position_covariance(
+                epoch_age_hours, pri_alt, primary_omm.bstar,
+                "DEBRIS" if "DEB" in primary_omm.object_name.upper() else "PAYLOAD"
+            )
+            cov_sec = estimate_position_covariance(
+                epoch_age_hours, sec_alt, omm.bstar,
+                "DEBRIS" if "DEB" in omm.object_name.upper() else "PAYLOAD"
+            )
+            hbr = determine_hard_body_radius(omm.object_name)
+            pc = compute_collision_probability(
+                r_pri, v_pri, r_sec, v_sec, cov_pri, cov_sec, hbr
+            )
+        except Exception:
+            pc = None
+            hbr = 0.01
+
         results.append(CloseApproach(
             primary_name=primary_omm.object_name,
             primary_norad_id=primary_omm.norad_cat_id,
@@ -297,7 +333,9 @@ def screen_conjunctions(
             in_track_km=round(in_track, 3),
             cross_track_km=round(cross_track, 3),
             relative_velocity_km_s=round(rel_v, 3),
-            risk_level=CloseApproach.classify_risk(min_dist),
+            risk_level=CloseApproach.classify_risk(min_dist, pc),
+            collision_probability=pc,
+            hard_body_radius_km=hbr,
         ))
 
     results.sort(key=lambda x: x.miss_distance_km)

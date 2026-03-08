@@ -817,6 +817,171 @@ select option {
     color: var(--text-bright);
 }
 
+/* OPERATOR ADVISORIES */
+.advisory-pane {
+    flex-shrink: 0;
+    max-height: 180px;
+}
+
+.adv-list {
+    padding: 4px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.adv-card {
+    background: var(--bg-cell);
+    border-left: 3px solid var(--cyan);
+    padding: 6px 8px;
+    margin-bottom: 3px;
+    border-radius: 0 2px 2px 0;
+}
+
+.adv-card.sev-critical {
+    border-left-color: var(--red);
+    background: var(--red-dim);
+    animation: flash 2s infinite;
+}
+
+.adv-card.sev-warning {
+    border-left-color: var(--orange);
+    background: var(--orange-dim);
+}
+
+.adv-card.sev-info {
+    border-left-color: var(--cyan);
+}
+
+.adv-title {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--text-bright);
+    letter-spacing: 0.05em;
+}
+
+.adv-sev {
+    font-size: 7px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 1px 4px;
+    border-radius: 2px;
+    float: right;
+}
+
+.adv-sev.critical {
+    color: var(--red);
+    background: var(--red-dim);
+}
+
+.adv-sev.warning {
+    color: var(--orange);
+    background: var(--orange-dim);
+}
+
+.adv-sev.info {
+    color: var(--cyan);
+    background: var(--cyan-dim);
+}
+
+.adv-msg {
+    font-size: 8px;
+    color: var(--text-dim);
+    margin-top: 3px;
+    line-height: 1.4;
+}
+
+.adv-orbits {
+    font-size: 7px;
+    color: var(--text-dim);
+    margin-top: 2px;
+    letter-spacing: 0.1em;
+}
+
+/* DECAY ALERTS */
+.decay-pane {
+    flex-shrink: 0;
+    max-height: 140px;
+}
+
+.decay-list {
+    padding: 4px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.decay-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 6px;
+    background: var(--bg-cell);
+    margin-bottom: 2px;
+    border-radius: 2px;
+    font-size: 9px;
+}
+
+.decay-item.imminent {
+    border-left: 3px solid var(--red);
+    background: var(--red-dim);
+}
+
+.decay-item.near_term {
+    border-left: 3px solid var(--orange);
+}
+
+.decay-item.long_term {
+    border-left: 3px solid var(--yellow);
+}
+
+.decay-name {
+    flex: 1;
+    font-weight: 600;
+    color: var(--text-bright);
+}
+
+.decay-days {
+    font-weight: 700;
+}
+
+.decay-days.imminent {
+    color: var(--red);
+}
+
+.decay-days.near_term {
+    color: var(--orange);
+}
+
+.decay-days.long_term {
+    color: var(--yellow);
+}
+
+.decay-rate {
+    font-size: 8px;
+    color: var(--text-dim);
+}
+
+/* Pc COLUMN */
+.pc-val {
+    font-size: 9px;
+    font-weight: 600;
+}
+
+.pc-critical {
+    color: var(--red);
+}
+
+.pc-warning {
+    color: var(--orange);
+}
+
+.pc-caution {
+    color: var(--yellow);
+}
+
+.pc-nominal {
+    color: var(--green);
+}
+
 /* ANIMATIONS */
 @keyframes flash {
 

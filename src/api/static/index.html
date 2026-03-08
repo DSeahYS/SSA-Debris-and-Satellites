@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GOD'S EYE — Combined Space Operations Center</title>
+    <title>GOD'S EYE — Combined Space Operations Center v4</title>
     <link
         href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap"
         rel="stylesheet">
@@ -164,6 +164,7 @@
                                 <th>LVL</th>
                                 <th>SECONDARY</th>
                                 <th>MISS<br>km</th>
+                                <th>Pc</th>
                                 <th>R<br>km</th>
                                 <th>I<br>km</th>
                                 <th>C<br>km</th>
@@ -173,16 +174,29 @@
                         </thead>
                         <tbody id="conj-tbody">
                             <tr>
-                                <td colspan="8" class="null-state">NO DATA</td>
+                                <td colspan="9" class="null-state">NO DATA</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
             </section>
             <section class="pane maneuver-pane">
-                <div class="pane-hdr">COLLISION AVOIDANCE</div>
+                <div class="pane-hdr">COLLISION AVOIDANCE <button id="btn-cdm-export" class="cmd-btn"
+                        style="float:right;font-size:8px;padding:1px 6px" disabled>⬇ CDM</button></div>
                 <div id="maneuver-detail">
                     <p class="null-state">SELECT EVENT FOR CA</p>
+                </div>
+            </section>
+            <section class="pane advisory-pane">
+                <div class="pane-hdr">OPERATOR ADVISORIES <span class="hdr-badge" id="adv-count">0</span></div>
+                <div id="advisory-list" class="adv-list">
+                    <p class="null-state">LOADING...</p>
+                </div>
+            </section>
+            <section class="pane decay-pane">
+                <div class="pane-hdr">DECAY ALERTS <span class="hdr-badge" id="decay-count">0</span></div>
+                <div id="decay-list" class="decay-list">
+                    <p class="null-state">LOADING...</p>
                 </div>
             </section>
             <section class="pane stats-pane">

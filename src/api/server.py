@@ -20,12 +20,17 @@ from data.celestrak_client import fetch_gp_data, parse_omm_records, get_satellit
 from data.space_weather_client import get_current_space_weather
 from models.baseline_sgp4 import SGP4Baseline
 from models.conjunction import screen_conjunctions, estimate_avoidance_maneuver, CloseApproach
+from models.transforms import eci_to_geodetic
+from models.decay_predictor import predict_reentry, get_decaying_objects
+from models.advisories import generate_advisories
+from models.cdm_generator import generate_cdm, format_cdm_kvn
 from api.schemas import SuccessResponse, ErrorResponse, APIError, APIErrorDetail
 
 import numpy as np
 from math import pi
 from sgp4.api import Satrec, WGS72
 from sgp4.conveniences import jday
+from datetime import datetime
 
 app = FastAPI(title="God's Eye SSA Platform", version="3.0.0")
 
@@ -191,9 +196,8 @@ def get_space_weather():
 def get_satellite_positions(group: str = Query("stations")):
     """
     Compute current lat/lng/alt for all satellites in a CelesTrak group.
-    Used to render satellite objects as dots on the globe.
+    Uses proper ECI→ECEF→Geodetic transform with GMST rotation.
     """
-    from datetime import datetime
     raw = fetch_gp_data(group)
     records = parse_omm_records(raw)
     now = datetime.utcnow()
@@ -205,11 +209,8 @@ def get_satellite_positions(group: str = Query("stations")):
             e, r, v = sat.sgp4(jd_now, fr_now)
             if e != 0 or r is None:
                 continue
-            x, y, z = r[0], r[1], r[2]
-            r_mag = np.sqrt(x**2 + y**2 + z**2)
-            alt = r_mag - 6371.0
-            lat = np.arcsin(z / r_mag) * (180.0 / pi)
-            lng = np.arctan2(y, x) * (180.0 / pi)
+            r_eci = np.array([r[0], r[1], r[2]])
+            lat, lng, alt = eci_to_geodetic(r_eci, jd_now, fr_now)
             results.append({
                 "norad_id": rec.norad_cat_id,
                 "name": rec.object_name,
@@ -267,6 +268,9 @@ def get_conjunctions(
         rec = asdict(a)
         if a.risk_level in ("critical", "warning"):
             rec["maneuver"] = estimate_avoidance_maneuver(a)
+        # Format Pc for display
+        if a.collision_probability is not None:
+            rec["collision_probability_display"] = f"{a.collision_probability:.2e}"
         results.append(rec)
 
     return SuccessResponse(
@@ -312,11 +316,8 @@ def get_baseline_predictions(
 
     results = []
     for t_jd, r, v in predictions_eci:
-        x, y, z = r[0], r[1], r[2]
-        r_mag = np.sqrt(x**2 + y**2 + z**2)
-        alt = r_mag - 6371.0
-        lat = np.arcsin(z / r_mag) * (180.0 / pi)
-        lng = np.arctan2(y, x) * (180.0 / pi)
+        r_eci = np.array([r[0], r[1], r[2]])
+        lat, lng, alt = eci_to_geodetic(r_eci, t_jd, 0.0)
         results.append({"lat": float(lat), "lng": float(lng), "alt": float(alt) / 6371.0, "time_jd": t_jd})
 
     return SuccessResponse(data=results, meta={
@@ -326,10 +327,214 @@ def get_baseline_predictions(
     })
 
 
+@app.get("/api/v1/decay")
+def get_decay_predictions(
+    group: str = Query("fengyun-1c-debris"),
+    threshold_days: float = Query(365.0, ge=1, le=3650, description="Show objects re-entering within N days"),
+):
+    """
+    Predict orbit decay and re-entry for objects in a CelesTrak group.
+    Uses atmospheric density models driven by real-time space weather.
+    """
+    raw = fetch_gp_data(group)
+    records = parse_omm_records(raw)
+
+    # Get current space weather for density scaling
+    try:
+        weather = get_current_space_weather()
+        f107 = weather.f107_flux or 150.0
+        kp = weather.kp_index or 2.0
+    except Exception:
+        f107, kp = 150.0, 2.0
+
+    predictions = get_decaying_objects(records, f107, kp, threshold_days)
+
+    return SuccessResponse(
+        data=[{
+            "norad_id": p.norad_id,
+            "name": p.name,
+            "periapsis_km": p.current_periapsis_km,
+            "apoapsis_km": p.current_apoapsis_km,
+            "decay_rate_km_day": p.decay_rate_km_per_day,
+            "days_to_reentry": p.estimated_days_to_reentry,
+            "reentry_date": p.estimated_reentry_date,
+            "risk_level": p.risk_level,
+        } for p in predictions],
+        meta={
+            "group": group,
+            "threshold_days": threshold_days,
+            "total_scanned": len(records),
+            "decaying_objects": len(predictions),
+            "f107_flux": f107,
+            "kp_index": kp,
+        }
+    )
+
+
+@app.get("/api/v1/advisories")
+def get_advisories():
+    """
+    Generate operational advisories based on current space weather.
+    Translates raw space environment data into actionable satellite ops guidance.
+    """
+    try:
+        weather = get_current_space_weather()
+        weather_dict = {
+            "kp_index": weather.kp_index,
+            "f107_flux": weather.f107_flux,
+            "storm_level": weather.storm_level,
+            "solar_wind_speed": weather.solar_wind_speed,
+            "solar_wind_bz": weather.solar_wind_bz,
+            "xray_class": weather.xray_class,
+            "proton_gt10mev": weather.proton_gt10mev,
+            "proton_gt100mev": weather.proton_gt100mev,
+        }
+        advisories = generate_advisories(weather_dict)
+    except Exception as e:
+        return JSONResponse(status_code=500, content=ErrorResponse(
+            error=APIError(code="advisory_error", message=str(e))
+        ).model_dump())
+
+    return SuccessResponse(
+        data=advisories,
+        meta={"total": len(advisories), "sources": ["NOAA/SWPC", "DSCOVR", "GOES"]}
+    )
+
+
+@app.get("/api/v1/cdm")
+def get_cdm(
+    norad_id: int = Query(..., description="Primary NORAD ID"),
+    secondary_id: int = Query(..., description="Secondary NORAD ID"),
+    format: str = Query("json", description="Output format: json or kvn"),
+):
+    """
+    Generate a Conjunction Data Message (CDM) for a specific conjunction event.
+    Supports CCSDS KVN text format and structured JSON.
+    """
+    # Find primary and secondary
+    primary_omm, _ = _find_omm_by_norad(norad_id)
+    secondary_omm, _ = _find_omm_by_norad(secondary_id)
+
+    if primary_omm is None:
+        return JSONResponse(status_code=404, content=ErrorResponse(
+            error=APIError(code="not_found", message=f"Primary NORAD ID {norad_id} not found.")
+        ).model_dump())
+    if secondary_omm is None:
+        return JSONResponse(status_code=404, content=ErrorResponse(
+            error=APIError(code="not_found", message=f"Secondary NORAD ID {secondary_id} not found.")
+        ).model_dump())
+
+    # Run quick screening to find the approach
+    approaches = screen_conjunctions(
+        primary_omm, [secondary_omm],
+        hours=72, step_seconds=60, threshold_km=500
+    )
+
+    if not approaches:
+        # Still generate a CDM with no close approach data
+        approach = CloseApproach(
+            primary_name=primary_omm.object_name,
+            primary_norad_id=norad_id,
+            secondary_name=secondary_omm.object_name,
+            secondary_norad_id=secondary_id,
+            tca="N/A", tca_jd=0,
+            miss_distance_km=9999, radial_km=0, in_track_km=0, cross_track_km=0,
+            relative_velocity_km_s=0, risk_level="nominal",
+        )
+    else:
+        approach = approaches[0]  # Closest approach
+
+    cdm = generate_cdm(approach, primary_omm, secondary_omm)
+
+    if format == "kvn":
+        kvn_text = format_cdm_kvn(cdm)
+        return JSONResponse(
+            content={"data": kvn_text, "meta": {"format": "CCSDS_KVN"}},
+            media_type="application/json"
+        )
+
+    return SuccessResponse(data=cdm, meta={"format": "JSON"})
+
+
+@app.get("/api/v1/satellite/{norad_id}")
+def get_satellite_detail(norad_id: int):
+    """
+    Get detailed information for a specific satellite by NORAD ID.
+    Includes orbital elements, decay prediction, and object classification.
+    """
+    omm, group = _find_omm_by_norad(norad_id)
+    if omm is None:
+        return JSONResponse(status_code=404, content=ErrorResponse(
+            error=APIError(code="not_found", message=f"NORAD ID {norad_id} not found.")
+        ).model_dump())
+
+    # Decay prediction
+    try:
+        weather = get_current_space_weather()
+        decay = predict_reentry(
+            omm.norad_cat_id, omm.object_name,
+            omm.periapsis_km, omm.apoapsis_km, omm.bstar,
+            weather.f107_flux, weather.kp_index
+        )
+        decay_info = {
+            "decay_rate_km_day": decay.decay_rate_km_per_day,
+            "days_to_reentry": decay.estimated_days_to_reentry,
+            "reentry_date": decay.estimated_reentry_date,
+            "risk_level": decay.risk_level,
+        }
+    except Exception:
+        decay_info = None
+
+    # Object type
+    name_upper = omm.object_name.upper()
+    if "DEB" in name_upper:
+        obj_type = "DEBRIS"
+    elif "R/B" in name_upper:
+        obj_type = "ROCKET BODY"
+    else:
+        obj_type = "PAYLOAD"
+
+    # Orbit regime
+    if omm.periapsis_km < 2000:
+        regime = "LEO"
+    elif omm.periapsis_km < 35786:
+        regime = "MEO"
+    else:
+        regime = "GEO"
+
+    return SuccessResponse(data={
+        "norad_id": omm.norad_cat_id,
+        "name": omm.object_name,
+        "object_id": omm.object_id,
+        "object_type": obj_type,
+        "orbit_regime": regime,
+        "group": group,
+        "epoch": omm.epoch,
+        "periapsis_km": round(omm.periapsis_km, 1),
+        "apoapsis_km": round(omm.apoapsis_km, 1),
+        "inclination": round(omm.inclination, 2),
+        "eccentricity": omm.eccentricity,
+        "period_min": round(omm.period_min, 2),
+        "mean_motion": round(omm.mean_motion, 8),
+        "bstar": omm.bstar,
+        "semimajor_axis_km": round(omm.semimajor_axis_km, 3),
+        "raan": round(omm.ra_of_asc_node, 4),
+        "arg_perigee": round(omm.arg_of_pericenter, 4),
+        "mean_anomaly": round(omm.mean_anomaly, 4),
+        "classification": omm.classification_type,
+        "decay": decay_info,
+    })
+
+
 @app.get("/")
 def read_root():
     return SuccessResponse(data={
-        "message": "God's Eye SSA Platform v3 — Operational Conjunction Assessment",
-        "endpoints": ["/api/v1/search", "/api/v1/conjunctions", "/api/v1/catalog",
-                      "/api/v1/space-weather", "/api/v1/predict/baseline"]
+        "message": "God's Eye SSA Platform v4 — Mission-Critical Conjunction Assessment",
+        "endpoints": [
+            "/api/v1/search", "/api/v1/conjunctions", "/api/v1/catalog",
+            "/api/v1/space-weather", "/api/v1/predict/baseline",
+            "/api/v1/positions", "/api/v1/groups",
+            "/api/v1/decay", "/api/v1/advisories",
+            "/api/v1/cdm", "/api/v1/satellite/{norad_id}",
+        ]
     })
