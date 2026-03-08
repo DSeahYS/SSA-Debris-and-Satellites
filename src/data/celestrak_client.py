@@ -13,7 +13,11 @@ from pathlib import Path
 
 # Constants
 CELESTRAK_BASE_URL = "https://celestrak.org/NORAD/elements/gp.php"
-CACHE_DIR = Path(__file__).parent.parent.parent / "data" / "cache"
+# On Vercel, the project dir is read-only; use /tmp for cache
+if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+    CACHE_DIR = Path("/tmp/celestrak_cache")
+else:
+    CACHE_DIR = Path(__file__).parent.parent.parent / "data" / "cache"
 CACHE_TTL_SECONDS = 3600  # 1 hour cache validity
 
 # Satellite groups available on CelesTrak
@@ -76,7 +80,10 @@ class OMMRecord:
 
 def _ensure_cache_dir():
     """Create the cache directory if it doesn't exist."""
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass  # Read-only filesystem, skip caching
 
 
 def _cache_path(group: str) -> Path:
@@ -106,8 +113,11 @@ def fetch_gp_data(group: str = "stations", use_cache: bool = True) -> List[dict]
 
     # Check cache first
     if use_cache and _is_cache_valid(group):
-        with open(_cache_path(group), "r") as f:
-            return json.load(f)
+        try:
+            with open(_cache_path(group), "r") as f:
+                return json.load(f)
+        except (OSError, json.JSONDecodeError):
+            pass  # Cache read failed, fetch from network
 
     # Fetch from CelesTrak
     params = {"GROUP": group, "FORMAT": "json"}
@@ -117,15 +127,21 @@ def fetch_gp_data(group: str = "stations", use_cache: bool = True) -> List[dict]
         data = response.json()
     except requests.RequestException as e:
         # Fall back to cache if available
-        if _cache_path(group).exists():
-            print(f"[CelesTrak] Network error, using cached data: {e}")
-            with open(_cache_path(group), "r") as f:
-                return json.load(f)
+        try:
+            if _cache_path(group).exists():
+                print(f"[CelesTrak] Network error, using cached data: {e}")
+                with open(_cache_path(group), "r") as f:
+                    return json.load(f)
+        except OSError:
+            pass
         raise ConnectionError(f"Failed to fetch CelesTrak data for group '{group}': {e}")
 
-    # Save to cache
-    with open(_cache_path(group), "w") as f:
-        json.dump(data, f)
+    # Save to cache (best-effort, don't crash if filesystem is read-only)
+    try:
+        with open(_cache_path(group), "w") as f:
+            json.dump(data, f)
+    except OSError:
+        pass  # Caching failed, data still returned
 
     return data
 
