@@ -12,16 +12,28 @@
     ],
     "routes": [
         {
-            "src": "/static/(.*)",
-            "dest": "/src/api/static/$1"
-        },
-        {
             "src": "/api/(.*)",
             "dest": "/api/index.py"
         },
         {
+            "src": "/style.css",
+            "dest": "/src/api/static/style.css"
+        },
+        {
+            "src": "/app.js",
+            "dest": "/src/api/static/app.js"
+        },
+        {
+            "src": "/static/(.*)",
+            "dest": "/src/api/static/$1"
+        },
+        {
+            "src": "/(.*\\.(css|js|png|jpg|ico|svg|woff2?))",
+            "dest": "/src/api/static/$1"
+        },
+        {
             "src": "/",
-            "dest": "/api/index.py"
+            "dest": "/src/api/static/index.html"
         }
     ]
 }
