@@ -141,17 +141,28 @@ const GlobeCtrl = {
                 if (d.name.includes('R/B')) return '#ff8800';
                 return '#00d4ff';
             })
-            .pointLabel(d => `${d.name} (${d.norad_id})`)
-            .pointResolution(6);
+            .pointLabel(d => `${d.name} (${d.norad_id})`) // 1
+            .pointResolution(6); // 1
+
+        const pri = data.find(d => d.norad_id === S.primary?.norad_id);
+        if (pri) {
+            this.w.ringsData([pri])
+                .ringColor(() => '#00ff88')
+                .ringMaxRadius(3)
+                .ringPropagationSpeed(2)
+                .ringRepeatPeriod(800);
+        } else {
+            this.w.ringsData([]);
+        }
     },
     showPath(data) {
         if (!data?.length) { this.w.pathsData([]); return; }
-        this.w.pathsData([data.map(p => [p.lat, p.lng, p.alt])])
-            .pathColor(() => 'rgba(0, 255, 136, 0.6)')
-            .pathDashLength(0.01)
-            .pathDashGap(0.005)
-            .pathDashAnimateTime(200000)
-            .pathStroke(1.5);
+        this.w.pathsData([data.map(p => [p.lat, p.lng, p.alt])]) // 2
+            .pathColor(() => 'rgba(0, 255, 136, 0.6)') // 2
+            .pathDashLength(0.01) // 2
+            .pathDashGap(0.005) // 2
+            .pathDashAnimateTime(1000000) // 2
+            .pathStroke(1.5); // 2
     },
 };
 
@@ -302,11 +313,11 @@ const Act = {
 
     async propagate() {
         if (!S.primary) return;
-        Log.add(`SGP4: ${S.primary.name}`);
-        try {
-            const r = await API.predict(S.primary.norad_id, 1, 96);
-            S.predictions = r.data;
-            GlobeCtrl.showPath(r.data);
+        Log.add(`SGP4: ${S.primary.name}`); // 3
+        try { // 3
+            const r = await API.predict(S.primary.norad_id, 1, 1440); // 3
+            S.predictions = r.data; // 3
+            GlobeCtrl.showPath(r.data); // 3
             Log.ok(`${r.data.length} ORBITAL PTS`);
         } catch (e) { Log.err(e.message); }
     },
