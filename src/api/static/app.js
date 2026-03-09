@@ -174,7 +174,7 @@ const Act = {
         results.slice(0, 20).forEach(s => {
             const d = document.createElement('div'); d.className = 'sr-item';
             d.innerHTML = `<div class="sr-name">${s.name}</div><div class="sr-meta">${s.norad_id} · ${s.periapsis_km}×${s.apoapsis_km} km · ${s.inclination}° · ${s.group}</div>`;
-            d.onclick = () => this.selectSat(s);
+            d.onmousedown = () => this.selectSat(s);
             D.searchResults.appendChild(d);
         });
         D.searchResults.classList.remove('hidden');
