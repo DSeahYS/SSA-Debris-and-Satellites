@@ -4,7 +4,13 @@
  * proper ECI→ECEF coordinates, and expanded weather.
  */
 
-const S = { primary: null, conjunctions: [], predictions: [], weather: null, screening: false, logCount: 0, objects: [], liveMode: true, timeOffset: 0, advisories: [], decayAlerts: [], selectedConj: null };
+const S = { primary: null, conjunctions: [], predictions: [], weather: null, screening: false, logCount: 0, objects: [], liveMode: true, timeOffset: 0, advisories: [], decayAlerts: [], selectedConj: null, trackedSats: new Map(), showSwath: true };
+
+// 8 distinct track colors for multi-satellite orbits
+const TRACK_COLORS = [
+    '#00ff88', '#ff6b6b', '#ffd93d', '#6bcbff', '#c56bff',
+    '#ff8c42', '#00e5ff', '#ff4da6'
+];
 const $ = id => document.getElementById(id);
 
 const D = {
@@ -34,6 +40,8 @@ const D = {
     decayCount: $('decay-count'), decayList: $('decay-list'),
     btnCdmExport: $('btn-cdm-export'),
     quickPick: $('quick-pick'),
+    trackedList: $('tracked-list'),
+    btnSwathToggle: $('btn-swath-toggle'),
 };
 
 // Clocks
@@ -63,107 +71,289 @@ const API = {
 // Globe
 const GlobeCtrl = {
     w: null,
-    init() {
-        this.w = Globe()(D.globeContainer)
-            .globeImageUrl('//unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
-            .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
-            .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
-            .atmosphereColor('#00d4ff')
-            .atmosphereAltitude(0.12)
-            .pointOfView({ altitude: 2.0 });
-
-        const controls = this.w.controls();
-        // Slow rotation
-        controls.autoRotate = true;
-        controls.autoRotateSpeed = 0.05;
-
-        // Disable built-in OrbitControls pan to prevent conflicts
-        controls.enablePan = false;
-
-        // Custom right-click drag = pan (translate along screen XY)
-        let isPanning = false;
-        let lastPanPos = { x: 0, y: 0 };
-
-        D.globeContainer.addEventListener('mousedown', e => {
-            if (e.button === 2) {
-                isPanning = true;
-                lastPanPos = { x: e.clientX, y: e.clientY };
-                D.globeContainer.style.cursor = 'grabbing';
-            }
+    entities: [],
+    trackEntities: new Map(),  // norad_id → { path, swath, color }
+    async init() {
+        // Create viewer with default imagery (Bing Maps via Ion)
+        this.w = new Cesium.Viewer(D.globeContainer, {
+            animation: false,
+            baseLayerPicker: false,
+            fullscreenButton: false,
+            geocoder: true,
+            homeButton: true,
+            infoBox: false,
+            sceneModePicker: false,
+            selectionIndicator: false,
+            timeline: false,
+            navigationHelpButton: true,
+            navigationInstructionsInitiallyVisible: false,
+            scene3DOnly: true,
         });
 
-        window.addEventListener('mousemove', e => {
-            if (isPanning) {
-                const dx = e.clientX - lastPanPos.x;
-                const dy = e.clientY - lastPanPos.y;
-                // Get current offset, add delta, apply new offset
-                const [ox, oy] = this.w.globeOffset();
-                this.w.globeOffset([ox + dx, oy + dy]);
-                lastPanPos = { x: e.clientX, y: e.clientY };
-            }
-        });
+        // Set terrain asynchronously
+        try {
+            this.w.scene.terrainProvider = await Cesium.createWorldTerrainAsync();
+        } catch (e) {
+            console.warn('Terrain load failed, using ellipsoid:', e);
+        }
 
-        window.addEventListener('mouseup', e => {
-            if (e.button === 2 && isPanning) {
-                isPanning = false;
-                D.globeContainer.style.cursor = '';
-            }
-        });
+        // Add 3D buildings asynchronously
+        try {
+            const buildings = await Cesium.createOsmBuildingsAsync();
+            this.w.scene.primitives.add(buildings);
+        } catch (e) {
+            console.warn('OSM Buildings load failed:', e);
+        }
 
-        // Suppress right-click context menu on globe
-        D.globeContainer.addEventListener('contextmenu', e => e.preventDefault());
+        // Atmosphere styling
+        this.w.scene.skyAtmosphere.hueShift = -0.1;
+        this.w.scene.skyAtmosphere.saturationShift = 0.5;
+        this.w.scene.globe.enableLighting = false;
 
-        // Double-right-click: reset pan to center
-        let lastRightClick = 0;
-        D.globeContainer.addEventListener('mousedown', e => {
-            if (e.button === 2) {
-                const now = Date.now();
-                if (now - lastRightClick < 400) {
-                    this.w.globeOffset([0, 0]);
-                    Log.add('PAN RESET TO CENTER');
+        // Add higher-res imagery layer (Bing Maps Aerial with Labels)
+        try {
+            const bingProvider = await Cesium.IonImageryProvider.fromAssetId(3);
+            this.w.scene.imageryLayers.addImageryProvider(bingProvider);
+        } catch (e) {
+            console.warn('Enhanced imagery failed, using default:', e);
+        }
+
+        // Click handler: satellites OR ground location
+        const handler = new Cesium.ScreenSpaceEventHandler(this.w.scene.canvas);
+        handler.setInputAction((click) => {
+            const pickedObject = this.w.scene.pick(click.position);
+            if (Cesium.defined(pickedObject) && pickedObject.id && pickedObject.id.satelliteData) {
+                // Satellite clicked
+                Act.clickObject(pickedObject.id.satelliteData);
+                this.hideLocationPopup();
+            } else {
+                D.satPopup.classList.add('hidden');
+                // Check if ground was clicked
+                const ray = this.w.camera.getPickRay(click.position);
+                const cartesian = this.w.scene.globe.pick(ray, this.w.scene);
+                if (cartesian) {
+                    const carto = Cesium.Cartographic.fromCartesian(cartesian);
+                    const lat = Cesium.Math.toDegrees(carto.latitude);
+                    const lng = Cesium.Math.toDegrees(carto.longitude);
+                    this.showLocationPopup(click.position, lat, lng);
+                } else {
+                    this.hideLocationPopup();
                 }
-                lastRightClick = now;
             }
-        });
+        }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+        
+        this.w.cesiumWidget.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+    },
 
-        // Points click handler
-        this.w.onPointClick(p => Act.clickObject(p));
+    // Location popup methods
+    showLocationPopup(screenPos, lat, lng) {
+        const popup = document.getElementById('location-popup');
+        const coordsEl = document.getElementById('loc-coords');
+        const nameEl = document.getElementById('loc-name');
+        const infoEl = document.getElementById('loc-info');
+        if (!popup) return;
+
+        // Position popup near click
+        const container = D.globeContainer.getBoundingClientRect();
+        let px = container.left + screenPos.x + 15;
+        let py = container.top + screenPos.y - 10;
+        // Keep on screen
+        if (px + 300 > window.innerWidth) px = px - 330;
+        if (py + 200 > window.innerHeight) py = py - 150;
+
+        popup.style.left = px + 'px';
+        popup.style.top = py + 'px';
+        popup.classList.add('visible');
+
+        coordsEl.textContent = `${lat >= 0 ? lat.toFixed(4) + '°N' : (-lat).toFixed(4) + '°S'}, ${lng >= 0 ? lng.toFixed(4) + '°E' : (-lng).toFixed(4) + '°W'}`;
+        nameEl.textContent = '';
+        infoEl.innerHTML = '<span class="loc-loading">⏳ IDENTIFYING LOCATION...</span>';
+
+        // Call AI to identify
+        fetch(`/api/v1/location-info?lat=${lat.toFixed(4)}&lng=${lng.toFixed(4)}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data?.data) {
+                    nameEl.textContent = data.data.name || '';
+                    infoEl.textContent = data.data.info || '';
+                }
+            })
+            .catch(e => {
+                infoEl.textContent = `Lookup failed: ${e.message}`;
+            });
+
+        Log.data(`CLICK: ${lat.toFixed(4)}°, ${lng.toFixed(4)}°`);
+    },
+
+    hideLocationPopup() {
+        const popup = document.getElementById('location-popup');
+        if (popup) popup.classList.remove('visible');
     },
     showPoints(data) {
-        this.w.pointsData(data)
-            .pointLat(d => d.lat)
-            .pointLng(d => d.lng)
-            .pointAltitude(d => Math.min(d.alt_km / 40000, 0.15))
-            .pointRadius(d => d.norad_id === S.primary?.norad_id ? 0.4 : 0.15)
-            .pointColor(d => {
-                if (d.norad_id === S.primary?.norad_id) return '#00ff88';
-                if (d.name.includes('DEB')) return '#ff4466';
-                if (d.name.includes('R/B')) return '#ff8800';
-                return '#00d4ff';
-            })
-            .pointLabel(d => `${d.name} (${d.norad_id})`) // 1
-            .pointResolution(6); // 1
+        // Remove non-track entities (satellite dots)
+        const trackIds = new Set();
+        this.trackEntities.forEach(te => {
+            if (te.path) trackIds.add(te.path.id);
+            if (te.swath) trackIds.add(te.swath.id);
+        });
+        const toRemove = [];
+        this.w.entities.values.forEach(e => {
+            if (!trackIds.has(e.id)) toRemove.push(e);
+        });
+        toRemove.forEach(e => this.w.entities.remove(e));
+        
+        data.forEach(d => {
+            const isPrimary = d.norad_id === S.primary?.norad_id;
+            const tracked = S.trackedSats.get(d.norad_id);
+            let color = Cesium.Color.fromCssColorString('#00d4ff');
+            if (tracked) color = Cesium.Color.fromCssColorString(tracked.color);
+            else if (isPrimary) color = Cesium.Color.fromCssColorString('#00ff88');
+            else if (d.name.includes('DEB')) color = Cesium.Color.fromCssColorString('#ff4466');
+            else if (d.name.includes('R/B')) color = Cesium.Color.fromCssColorString('#ff8800');
 
-        const pri = data.find(d => d.norad_id === S.primary?.norad_id);
-        if (pri) {
-            this.w.ringsData([pri])
-                .ringColor(() => '#00ff88')
-                .ringMaxRadius(3)
-                .ringPropagationSpeed(2)
-                .ringRepeatPeriod(800);
-        } else {
-            this.w.ringsData([]);
+            this.w.entities.add({
+                position: Cesium.Cartesian3.fromDegrees(d.lng, d.lat, d.alt_km * 1000),
+                point: {
+                    pixelSize: (isPrimary || tracked) ? 8 : 4,
+                    color: color,
+                    outlineColor: Cesium.Color.BLACK,
+                    outlineWidth: 1
+                },
+                satelliteData: d
+            });
+        });
+
+        // Redraw all tracked paths
+        this.redrawAllTracks();
+    },
+
+    // Add or update a single track (path + swath) for a satellite
+    addTrack(noradId, predictions, colorHex) {
+        this.removeTrack(noradId);
+        if (!predictions?.length) return;
+
+        const cssColor = Cesium.Color.fromCssColorString(colorHex);
+
+        // Build positions array
+        const positions = [];
+        const groundPositions = [];
+        predictions.forEach(p => {
+            positions.push(p.lng, p.lat, p.alt * 1000);
+            groundPositions.push(Cesium.Cartographic.fromDegrees(p.lng, p.lat));
+        });
+
+        // Orbital path polyline
+        const pathEntity = this.w.entities.add({
+            polyline: {
+                positions: Cesium.Cartesian3.fromDegreesArrayHeights(positions),
+                width: 2.5,
+                material: new Cesium.PolylineDashMaterialProperty({
+                    color: cssColor.withAlpha(0.8),
+                    dashLength: 16.0
+                })
+            }
+        });
+
+        // Scan swath corridor — width based on altitude
+        // Typical EO sensor ~45° FOV → swath ≈ 2 * alt * tan(22.5°)
+        const avgAltKm = predictions.reduce((s, p) => s + p.alt, 0) / predictions.length * 6371;
+        const swathWidthKm = Math.min(2 * avgAltKm * Math.tan(22.5 * Math.PI / 180), 3000);
+        const swathHalfM = (swathWidthKm * 1000) / 2;
+
+        // Only create swath for every Nth point to keep it efficient
+        const step = Math.max(1, Math.floor(predictions.length / 300));
+        const corridorDegrees = [];
+        for (let i = 0; i < predictions.length; i += step) {
+            corridorDegrees.push(predictions[i].lng, predictions[i].lat);
+        }
+
+        let swathEntity = null;
+        if (S.showSwath && corridorDegrees.length >= 4) {
+            swathEntity = this.w.entities.add({
+                corridor: {
+                    positions: Cesium.Cartesian3.fromDegreesArray(corridorDegrees),
+                    width: swathHalfM * 2,
+                    material: cssColor.withAlpha(0.12),
+                    height: 0,
+                    outline: true,
+                    outlineColor: cssColor.withAlpha(0.3),
+                    outlineWidth: 1,
+                }
+            });
+        }
+
+        this.trackEntities.set(noradId, { path: pathEntity, swath: swathEntity, color: colorHex, predictions });
+    },
+
+    removeTrack(noradId) {
+        const existing = this.trackEntities.get(noradId);
+        if (existing) {
+            if (existing.path) this.w.entities.remove(existing.path);
+            if (existing.swath) this.w.entities.remove(existing.swath);
+            this.trackEntities.delete(noradId);
         }
     },
-    showPath(data) {
-        if (!data?.length) { this.w.pathsData([]); return; }
-        this.w.pathsData([data.map(p => [p.lat, p.lng, p.alt])]) // 2
-            .pathColor(() => 'rgba(0, 255, 136, 0.6)') // 2
-            .pathDashLength(0.01) // 2
-            .pathDashGap(0.005) // 2
-            .pathDashAnimateTime(1000000) // 2
-            .pathStroke(1.5); // 2
+
+    // Redraw all tracked paths (used after showPoints clears entities)
+    redrawAllTracks() {
+        // Re-add tracks from stored predictions
+        const entries = Array.from(S.trackedSats.entries());
+        entries.forEach(([noradId, info]) => {
+            if (info.predictions) {
+                this.addTrack(noradId, info.predictions, info.color);
+            }
+        });
     },
+
+    // Toggle swath visibility for all tracks
+    toggleSwath(show) {
+        S.showSwath = show;
+        // Remove all swaths then re-add if showing
+        this.trackEntities.forEach((te, noradId) => {
+            if (te.swath) {
+                this.w.entities.remove(te.swath);
+                te.swath = null;
+            }
+        });
+        if (show) {
+            this.trackEntities.forEach((te, noradId) => {
+                if (te.predictions) {
+                    const info = S.trackedSats.get(noradId);
+                    if (info) {
+                        // Re-create swath
+                        const cssColor = Cesium.Color.fromCssColorString(te.color);
+                        const step = Math.max(1, Math.floor(te.predictions.length / 300));
+                        const corridorDegrees = [];
+                        for (let i = 0; i < te.predictions.length; i += step) {
+                            corridorDegrees.push(te.predictions[i].lng, te.predictions[i].lat);
+                        }
+                        const avgAltKm = te.predictions.reduce((s, p) => s + p.alt, 0) / te.predictions.length * 6371;
+                        const swathWidthKm = Math.min(2 * avgAltKm * Math.tan(22.5 * Math.PI / 180), 3000);
+                        if (corridorDegrees.length >= 4) {
+                            te.swath = this.w.entities.add({
+                                corridor: {
+                                    positions: Cesium.Cartesian3.fromDegreesArray(corridorDegrees),
+                                    width: swathWidthKm * 1000,
+                                    material: cssColor.withAlpha(0.12),
+                                    height: 0,
+                                    outline: true,
+                                    outlineColor: cssColor.withAlpha(0.3),
+                                    outlineWidth: 1,
+                                }
+                            });
+                        }
+                    }
+                }
+            });
+        }
+    },
+
+    showPath(data, colorHex = '#00ff88') {
+        // Legacy single-path method for primary satellite
+        if (S.primary) {
+            this.addTrack(S.primary.norad_id, data, colorHex);
+        }
+    }
 };
 
 // Log
@@ -213,6 +403,8 @@ const Act = {
 
     // Click a satellite object on the globe
     clickObject(pt) {
+        const isTracked = S.trackedSats.has(pt.norad_id);
+        const safeName = pt.name.replace(/'/g, "\\'");
         D.satPopup.classList.remove('hidden');
         D.popupContent.innerHTML = `
             <div class="det-title" style="font-size:11px">${pt.name}</div>
@@ -220,9 +412,66 @@ const Act = {
             <div class="det-row"><div class="det-cell"><label>LAT</label><div class="det-val">${pt.lat.toFixed(2)}°</div></div><div class="det-cell"><label>LNG</label><div class="det-val">${pt.lng.toFixed(2)}°</div></div></div>
             <div class="det-row"><div class="det-cell"><label>PERIAPSIS</label><div class="det-val">${pt.periapsis_km} km</div></div><div class="det-cell"><label>APOAPSIS</label><div class="det-val">${pt.apoapsis_km} km</div></div></div>
             <div class="det-row"><div class="det-cell"><label>INCL</label><div class="det-val">${pt.inclination}°</div></div><div class="det-cell"><label>PERIOD</label><div class="det-val">${pt.period_min} min</div></div></div>
-            <div style="padding:4px;margin-top:4px"><button class="cmd-btn cmd-primary" onclick="Act.selectSat({norad_id:${pt.norad_id},name:'${pt.name.replace(/'/g, "\\'")}',group:'${D.inGlobeGroup.value}',periapsis_km:${pt.periapsis_km},apoapsis_km:${pt.apoapsis_km},inclination:${pt.inclination},period_min:${pt.period_min}});document.getElementById('sat-popup').classList.add('hidden')">SET AS PRIMARY</button></div>
+            <div style="padding:4px;margin-top:4px;display:flex;gap:4px">
+                <button class="cmd-btn cmd-primary" onclick="Act.selectSat({norad_id:${pt.norad_id},name:'${safeName}',group:'${D.inGlobeGroup.value}',periapsis_km:${pt.periapsis_km},apoapsis_km:${pt.apoapsis_km},inclination:${pt.inclination},period_min:${pt.period_min}});document.getElementById('sat-popup').classList.add('hidden')">SET PRIMARY</button>
+                <button class="cmd-btn ${isTracked ? 'cmd-danger' : 'cmd-track'}" onclick="Act.${isTracked ? 'untrackSat' : 'trackSat'}({norad_id:${pt.norad_id},name:'${safeName}',group:'${D.inGlobeGroup.value}',periapsis_km:${pt.periapsis_km},apoapsis_km:${pt.apoapsis_km},inclination:${pt.inclination},period_min:${pt.period_min}});document.getElementById('sat-popup').classList.add('hidden')">${isTracked ? '✕ UNTRACK' : '+ TRACK'}</button>
+            </div>
         `;
         Log.data(`INSPECT: ${pt.name} [${pt.norad_id}] @ ${pt.alt_km} km`);
+    },
+
+    // Track a satellite (add to multi-track list)
+    async trackSat(sat) {
+        if (S.trackedSats.has(sat.norad_id)) return;
+        const colorIdx = S.trackedSats.size % TRACK_COLORS.length;
+        const color = TRACK_COLORS[colorIdx];
+        S.trackedSats.set(sat.norad_id, { sat, color, predictions: null });
+        Log.ok(`TRACKING: ${sat.name} [${sat.norad_id}] — ${color}`);
+
+        // Fetch predictions for this satellite
+        try {
+            const r = await API.predict(sat.norad_id, 1, 1440);
+            const info = S.trackedSats.get(sat.norad_id);
+            if (info) {
+                info.predictions = r.data;
+                GlobeCtrl.addTrack(sat.norad_id, r.data, color);
+            }
+            Log.ok(`${r.data.length} ORBITAL PTS FOR ${sat.name}`);
+        } catch (e) { Log.err(`TRACK ${sat.name}: ${e.message}`); }
+
+        this.renderTrackedList();
+        if (S.objects.length) GlobeCtrl.showPoints(S.objects);
+    },
+
+    untrackSat(sat) {
+        S.trackedSats.delete(sat.norad_id);
+        GlobeCtrl.removeTrack(sat.norad_id);
+        Log.warn(`UNTRACKED: ${sat.name} [${sat.norad_id}]`);
+        this.renderTrackedList();
+        if (S.objects.length) GlobeCtrl.showPoints(S.objects);
+    },
+
+    renderTrackedList() {
+        const el = D.trackedList;
+        const countEl = document.getElementById('tracked-count');
+        if (countEl) countEl.textContent = S.trackedSats.size;
+        if (!el) return;
+        if (!S.trackedSats.size) {
+            el.innerHTML = '<p class="null-state">NO SATELLITES TRACKED</p>';
+            return;
+        }
+        el.innerHTML = '';
+        S.trackedSats.forEach((info, noradId) => {
+            const item = document.createElement('div');
+            item.className = 'tracked-item';
+            item.innerHTML = `
+                <span class="tracked-color" style="background:${info.color}"></span>
+                <span class="tracked-name">${info.sat.name}</span>
+                <span class="tracked-id">${noradId}</span>
+                <button class="tracked-remove" onclick="Act.untrackSat({norad_id:${noradId},name:'${info.sat.name.replace(/'/g, "\\'")}'})" title="Remove track">✕</button>
+            `;
+            el.appendChild(item);
+        });
     },
 
     async loadWeather() {
@@ -395,6 +644,13 @@ D.btnScreen.addEventListener('click', () => Act.screen());
 D.btnPropagate.addEventListener('click', () => Act.propagate());
 D.btnLoadObjects.addEventListener('click', () => { Act.loadObjects(); Act.loadDecayAlerts(); });
 if (D.btnCdmExport) D.btnCdmExport.addEventListener('click', () => Act.exportCDM());
+if (D.btnSwathToggle) D.btnSwathToggle.addEventListener('click', () => {
+    const show = !S.showSwath;
+    GlobeCtrl.toggleSwath(show);
+    D.btnSwathToggle.textContent = show ? '◉ SWATH ON' : '○ SWATH OFF';
+    D.btnSwathToggle.classList.toggle('active', show);
+    Log.add(show ? 'SCAN SWATH ENABLED' : 'SCAN SWATH DISABLED');
+});
 if (D.quickPick) D.quickPick.addEventListener('change', () => {
     const val = D.quickPick.value;
     if (val) { D.searchInput.value = val; Act.search(); D.quickPick.value = ''; }
@@ -406,7 +662,17 @@ D.timeOffset.addEventListener('input', e => { S.timeOffset = +e.target.value; D.
 
 // Boot
 async function boot() {
-    GlobeCtrl.init();
+    try {
+        const confRes = await fetch('/api/v1/config');
+        const confData = await confRes.json();
+        if (confData?.data?.CESIUM_ION_TOKEN) {
+            Cesium.Ion.defaultAccessToken = confData.data.CESIUM_ION_TOKEN;
+        }
+    } catch (e) {
+        console.warn("Failed to load config", e);
+    }
+    
+    await GlobeCtrl.init();
     Log.add('C2 v5.0 INITIALIZED — MISSION-CRITICAL SSA');
     Log.add('Pc ENGINE | CDM GENERATION | DECAY PREDICTION | ADVISORIES');
     Log.add('QUERY SATELLITE OR LOAD OBJECTS TO BEGIN');

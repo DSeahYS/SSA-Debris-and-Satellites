@@ -8,8 +8,9 @@
     <link
         href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
-    <script src="//unpkg.com/globe.gl"></script>
+    <link rel="stylesheet" href="style.css?v=6">
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.116/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
 </head>
 
 <body>
@@ -151,6 +152,16 @@
                 <div class="screen-status" id="screen-status">AWAITING TARGET SELECTION</div>
             </section>
 
+            <!-- Multi-Satellite Tracking -->
+            <section class="pane">
+                <div class="pane-hdr">TRACKED SATELLITES <span class="hdr-badge" style="color:#6bcbff" id="tracked-count">0</span>
+                    <button id="btn-swath-toggle" class="cmd-btn cmd-sm active" style="float:right;font-size:8px;padding:1px 6px">◉ SWATH ON</button>
+                </div>
+                <div id="tracked-list" class="tracked-list">
+                    <p class="null-state">NO SATELLITES TRACKED</p>
+                </div>
+            </section>
+
             <!-- Time Control -->
             <section class="pane">
                 <div class="pane-hdr">TIME CONTROL</div>
@@ -176,6 +187,12 @@
                 <!-- Sat info popup -->
                 <div id="sat-popup" class="sat-popup hidden">
                     <div id="popup-content"></div>
+                </div>
+                <!-- Location click popup -->
+                <div id="location-popup">
+                    <div class="loc-coords" id="loc-coords"></div>
+                    <div class="loc-name" id="loc-name"></div>
+                    <div class="loc-info" id="loc-info"></div>
                 </div>
             </section>
             <section class="pane log-pane">
@@ -247,7 +264,7 @@
             </section>
         </div>
     </main>
-    <script src="app.js"></script>
+    <script src="app.js?v=6"></script>
 </body>
 
 </html>

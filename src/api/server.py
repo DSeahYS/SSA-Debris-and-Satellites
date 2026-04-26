@@ -14,6 +14,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import conint
 from fastapi.exceptions import RequestValidationError
 from dataclasses import asdict
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from data.ingestion import load_sample_tle, parse_tle
 from data.celestrak_client import fetch_gp_data, parse_omm_records, get_satellite_catalog, SATELLITE_GROUPS
@@ -524,6 +527,65 @@ def get_satellite_detail(norad_id: int):
         "classification": omm.classification_type,
         "decay": decay_info,
     })
+
+@app.get("/api/v1/config")
+def get_config():
+    return SuccessResponse(data={
+        "CESIUM_ION_TOKEN": os.environ.get("CESIUM_ION_TOKEN")
+    })
+
+
+@app.get("/api/v1/location-info")
+async def get_location_info(
+    lat: float = Query(..., description="Latitude"),
+    lng: float = Query(..., description="Longitude"),
+):
+    """Use AI to identify a geographic location and provide basic stats."""
+    import httpx
+
+    api_key = (os.environ.get("OPENROUTER_API_KEY") or "").strip()
+    model = (os.environ.get("OPENROUTER_MODEL") or "z-ai/glm-4.5-air:free").strip()
+
+    if not api_key:
+        return SuccessResponse(data={
+            "name": "Unknown",
+            "info": f"Coordinates: {lat:.4f}°, {lng:.4f}°\nNo AI API key configured."
+        })
+
+    prompt = (
+        f"I clicked on a point on the globe at latitude {lat:.4f}° and longitude {lng:.4f}°. "
+        f"In 3-4 short lines, tell me: 1) The name of this location (city, region, country, or ocean/sea name), "
+        f"2) One key fact about it, 3) Its approximate population or area if relevant. "
+        f"Be concise and factual. If it's in the ocean, name the ocean/sea and nearest land."
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 200,
+                }
+            )
+            data = resp.json()
+            answer = data.get("choices", [{}])[0].get("message", {}).get("content", "No response")
+            # Parse first line as name
+            lines = answer.strip().split("\n")
+            name = lines[0] if lines else "Unknown"
+            info = "\n".join(lines[1:]) if len(lines) > 1 else answer
+
+            return SuccessResponse(data={"name": name, "info": info})
+    except Exception as e:
+        return SuccessResponse(data={
+            "name": f"{lat:.2f}°, {lng:.2f}°",
+            "info": f"AI lookup failed: {str(e)}"
+        })
 
 
 @app.get("/")

@@ -1147,3 +1147,57 @@ select:focus {
     background: rgba(0, 212, 255, 0.15);
     border-radius: 1px;
 }
+
+/* TRACKED SATELLITES */
+.tracked-list { max-height: 120px; overflow-y: auto; }
+.tracked-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 3px 6px; border-bottom: 1px solid var(--border);
+    font-size: 10px;
+}
+.tracked-item:hover { background: var(--cyan-dim); }
+.tracked-color { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.tracked-name { flex: 1; color: var(--text-bright); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tracked-id { color: var(--text-dim); font-size: 9px; }
+.tracked-remove {
+    background: none; border: none; color: var(--red); cursor: pointer;
+    font-size: 11px; padding: 0 2px; line-height: 1;
+}
+.tracked-remove:hover { color: #ff6688; }
+
+.cmd-track { border-color: var(--cyan) !important; color: var(--cyan) !important; }
+.cmd-track:hover { background: var(--cyan-dim) !important; }
+.cmd-danger { border-color: var(--red) !important; color: var(--red) !important; }
+.cmd-danger:hover { background: var(--red-dim) !important; }
+.cmd-sm { font-size: 9px; padding: 2px 6px; }
+.cmd-sm.active { color: var(--green); border-color: var(--green); }
+
+/* LOCATION INFO POPUP */
+#location-popup {
+    position: fixed; z-index: 9999;
+    background: rgba(8, 12, 20, 0.95);
+    border: 1px solid var(--cyan);
+    border-radius: 4px; padding: 8px 10px;
+    min-width: 220px; max-width: 340px;
+    pointer-events: auto; display: none;
+    box-shadow: 0 4px 20px rgba(0, 212, 255, 0.2);
+    backdrop-filter: blur(8px);
+}
+#location-popup.visible { display: block; }
+#location-popup .loc-coords {
+    font: 600 11px var(--mono); color: var(--cyan);
+    margin-bottom: 4px;
+}
+#location-popup .loc-name {
+    font: 600 11px var(--sans); color: var(--text-bright);
+    margin-bottom: 3px;
+}
+#location-popup .loc-info {
+    font: 400 9px var(--mono); color: var(--text);
+    line-height: 1.5; white-space: pre-wrap;
+}
+#location-popup .loc-loading {
+    color: var(--text-dim); font-size: 9px;
+    animation: blink 1s infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
